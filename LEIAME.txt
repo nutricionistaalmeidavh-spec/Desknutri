@@ -1,0 +1,234 @@
+NutriDesktop - Protótipo
+=========================
+
+O QUE É
+-------
+Software desktop para nutricionistas, com navegação em menu lateral:
+- Dashboard: visão geral do consultório
+- Pacientes: cadastro, avaliação antropométrica, histórico/evolução e plano alimentar
+- Modelos de Receitas: receitas prontas com macros calculados pela base TACO
+- Modelos de Planos Alimentares: estruturas de plano por objetivo/condição,
+  aplicáveis a qualquer paciente com um clique
+- DRI / Doenças Crônicas: sínteses de diretrizes nutricionais (diabetes,
+  hipertensão, dislipidemia, doença renal crônica, obesidade)
+- Materno-Infantil: calculadora de ganho de peso gestacional (IOM 2009) e
+  incrementos nutricionais por trimestre/lactação
+- Design: nome da clínica e logo aplicados ao cabeçalho dos PDFs
+- Configurações: modo escuro/claro
+
+Todos os dados ficam salvos localmente no arquivo "nutridesktop.db"
+(criado automaticamente na primeira vez que o programa roda), na mesma
+pasta. Não precisa de internet nem de servidor.
+
+COMO INSTALAR (Windows)
+------------------------
+1. Instale o Python (python.org/downloads) — na instalação, marque a
+   opção "Add python.exe to PATH".
+2. Abra o Prompt de Comando nesta pasta e rode:
+       pip install -r requirements.txt
+3. Rode o programa:
+       python app.py
+
+IMPORTANTE SOBRE AS DIRETRIZES CLÍNICAS
+------------------------------------------
+O conteúdo em "DRI / Doenças Crônicas" e "Materno-Infantil" são sínteses
+educacionais para consulta rápida em consultório, não substituem a leitura
+das diretrizes originais nem o julgamento clínico caso a caso. Fontes
+usadas: Diretriz SBD (diabetes), Diretrizes Brasileiras de Hipertensão
+2020 (SBC), princípios gerais de diretrizes de dislipidemia/KDOQI, e
+Institute of Medicine 2009 (ganho de peso gestacional).
+
+COMO USAR
+---------
+1. Tela inicial: lista de pacientes. Clique em "+ Novo Paciente" para
+   cadastrar.
+2. Dentro da ficha do paciente:
+   - Aba "Nova Avaliação": preencha idade/peso/altura (obrigatórios) e,
+     se tiver, as dobras cutâneas e circunferências. Escolha a fórmula
+     de gasto energético e clique em "Calcular e Salvar".
+   - Aba "Histórico e Evolução": mostra todas as avaliações salvas e um
+     gráfico de evolução de peso e % de gordura (a partir da 2ª avaliação).
+   - Aba "Plano Alimentar": crie um plano, defina a meta calórica (VET),
+     busque alimentos da base TACO e adicione às refeições. O sistema
+     soma automaticamente kcal e macros e compara com a meta.
+3. Em qualquer avaliação ou plano, você pode exportar um PDF pronto
+   para entregar ao paciente.
+
+SISTEMA DE LICENÇA (proteção contra cópia/revenda)
+------------------------------------------------------
+O programa agora pede uma chave de ativação na primeira vez que abre.
+A chave trava no computador onde foi digitada primeiro - se o cliente
+copiar o .exe e mandar pra outra pessoa, não funciona lá.
+
+COMO GERAR UMA CHAVE PARA UM CLIENTE (só você faz isso, nunca o cliente):
+    python gerar_licenca.py
+Ele sugere automaticamente o próximo número de série e mostra a chave
+pronta pra enviar. Guarde uma planilha simples (nº de série -> nome do
+cliente) pra ter controle de quem comprou o quê.
+
+ANTES DE VENDER, IMPORTANTE:
+1. Abra o arquivo "licensing.py" e troque o valor de SECRET por um texto
+   longo e único, só seu (qualquer frase aleatória grande serve).
+2. NÃO envie o arquivo "gerar_licenca.py" nem "proximo_serial.txt" para
+   os clientes - fica só com você. O resto dos arquivos (incluindo
+   licensing.py) pode ir no .exe normalmente.
+3. Gere o .exe DEPOIS de trocar o SECRET (veja seção seguinte).
+
+LIMITAÇÃO HONESTA: esse é um sistema offline (não depende de internet nem
+servidor), o que é ótimo pra simplicidade, mas tem um limite real - um
+usuário com bastante conhecimento técnico eventualmente consegue examinar
+o .exe e burlar a validação. Isso não é diferente da grande maioria dos
+softwares pequenos vendidos assim; é uma trava contra cópia/revenda casual
+(o cenário mais provável), não uma proteção militar. Se um dia isso virar
+um problema real, a solução mais forte é um servidor de ativação online,
+que consigo te ajudar a montar depois.
+
+TELA "COMPRAR LICENÇA" (dentro do app)
+------------------------------------------
+Quando o app abre sem licença ativa, além do campo pra digitar a chave,
+tem um botão "Ainda não tenho uma chave / Comprar" que abre uma telinha
+com link de pagamento e WhatsApp. Configure os seus dados reais em
+licensing.py, logo abaixo do SECRET:
+    LINK_COMPRA = "..."          -> link de pagamento (Pix, checkout, etc)
+    CONTATO_WHATSAPP = "..."     -> seu número com DDI+DDD, só números
+    MENSAGEM_WHATSAPP = "..."    -> mensagem que já vem pronta no WhatsApp
+Como ainda não tem entrega automática de chave, o fluxo é: cliente paga ->
+te chama no WhatsApp/link -> você confere o pagamento -> gera a chave com
+"python gerar_licenca.py" -> envia pra ele.
+
+GERAR O INSTALADOR WINDOWS (RECOMENDADO)
+----------------------------------------
+1. Extraia o ZIP inteiro em uma pasta do Windows.
+2. Instale o Inno Setup 6 ou 7 (gratuito) em https://jrsoftware.org/isdl.php.
+3. D? duplo clique em "gerar_instalador.bat" (ou em "gerar_executavel.bat").
+4. O arquivo final sera: installer\NutriDesktop-Setup.exe.
+5. Distribua somente o arquivo Setup.exe. Ao abri-lo, ele solicita permissao
+   de administrador e instala o NutriDesktop em Arquivos de Programas,
+   criando atalho no Menu Iniciar e desinstalador.
+
+O arquivo dist\NutriDesktop.exe e apenas uma etapa interna de montagem.
+Nao entregue esse arquivo isoladamente como instalador.
+
+Arquivos envolvidos:
+- gerar_instalador.bat -> gera o aplicativo e o instalador normal.
+- NutriDesktop.iss -> configuracao do Inno Setup (Arquivos de Programas,
+  atalhos e desinstalador).
+- nutridesktop.spec -> configuracao do PyInstaller.
+- icon.ico -> icone do executavel.
+
+O QUE FOI ADICIONADO NESTA VERSÃO
+-----------------------------------
+- Equação de Petroski (1995, 4 dobras) para composição corporal, validada
+  para a população brasileira. Requer a dobra da panturrilha medial
+  (novo campo na aba de avaliação). Homens usam subescapular+tríceps+
+  suprailíaca+panturrilha; mulheres usam axilar+suprailíaca+coxa+
+  panturrilha (e também peso/altura).
+- Campo opcional de bioimpedância: se o paciente já tiver o % de gordura
+  medido por aparelho, ele passa a ser o valor considerado (prioridade
+  sobre a média das dobras).
+- Comparação de micronutrientes do plano alimentar com valores de
+  referência DRI (cálcio, ferro, zinco, magnésio, vitamina C, complexo B
+  etc.), com aviso quando algo está abaixo de 70% da recomendação. Entra
+  automaticamente no relatório em tela e no PDF do plano.
+- Tela de itens do plano agora é uma lista (Treeview) com botão
+  "Remover item selecionado", em vez de só texto.
+
+O QUE FOI ADICIONADO NESTA VERSÃO (v0.6)
+-------------------------------------------
+- Sidebar com paleta de cores sincronizada ao Design System do Figma, e
+  destaque visual da página atual (hover + ativo).
+- "Agenda" (novo item no menu): lista de consultas de todos os pacientes,
+  marcar como Realizada/Faltou/Cancelada, agendar direto da ficha do
+  paciente ou da lista de pacientes.
+- Editar dados cadastrais do paciente (nome, telefone, email etc.) pela
+  ficha - antes só dava pra cadastrar, não corrigir depois.
+- Histórico: selecionar 2 avaliações (Ctrl+clique) e comparar lado a lado
+  (peso, IMC, %gordura, massa magra, TMB, VET, com diferença colorida);
+  excluir avaliação(ões) selecionada(s) direto da lista.
+- "Relatório completo (PDF)": um botão na ficha do paciente que junta a
+  última anamnese salva + última avaliação + plano vigente num PDF só,
+  anexado na pasta do paciente.
+- Anamnese: o conteúdo preenchido agora fica salvo no banco (não só como
+  PDF) - dá pra carregar a última anamnese salva e continuar de onde parou.
+- Backup e restauração (em Configurações): exporta um .zip com banco de
+  dados + pasta de documentos de todos os pacientes; restaura a partir
+  desse .zip.
+- Exportar lista de pacientes em CSV (Excel).
+- Curva de crescimento infantil simplificada (Materno-Infantil): avalia
+  peso e altura por idade (0-19 anos) contra mediana aproximada da OMS.
+  É uma triagem rápida - não substitui o gráfico oficial OMS/SBP.
+
+O QUE FOI ADICIONADO NA VERSÃO v0.5
+-------------------------------------------
+- Nova aba "Anamnese" na ficha do paciente: dois modelos prontos (Adulto e
+  Adolescente), baseados em fichas de estágio/disciplina de Avaliação
+  Nutricional da UFTM. Carregue o modelo, preencha direto no texto e
+  exporte em PDF anexado na pasta do paciente.
+- Diretrizes completadas com conteúdo de protocolos reais de orientação
+  nutricional (Hospital de Clínicas - UFTM): Diabetes, Hipertensão e
+  Doença Renal Crônica ganharam pontos práticos novos (fracionamento,
+  regra de não combinar amidos, técnica de remolho do feijão, sal em
+  colher de chá, cuidados com pé diabético etc.), sem duplicar o que já
+  existia.
+- 3 diretrizes novas: Encefalopatia Hepática e Cirrose, Pancreatite
+  Crônica, e Úlcera Péptica/Gástrica.
+
+O QUE FOI ADICIONADO NA VERSÃO v0.4
+-------------------------------------------
+- Diretrizes agora ficam no banco de dados (editáveis): botão "+ Nova
+  diretriz" na tela DRI/Doenças Crônicas para adicionar as suas próprias,
+  e "Excluir" para remover.
+- "Anexar a paciente": em qualquer diretriz, gera um PDF combinando a
+  diretriz + orientações que você escreve na hora + resumo do plano
+  alimentar vigente do paciente, e salva automaticamente na pasta dele
+  (pronto para abrir/imprimir).
+- Cada paciente agora tem uma pasta própria em disco
+  ("pacientes_arquivos/<id>_<nome>/"), e uma aba "Documentos" na ficha
+  lista tudo que foi anexado (avaliações, planos e diretrizes exportados),
+  com botão para abrir o arquivo.
+- "+ Nova receita" na tela de Modelos de Receitas: monta a receita
+  buscando ingredientes na base TACO.
+- "+ Novo modelo" na tela de Modelos de Planos Alimentares: monta um
+  modelo do zero, refeição por refeição.
+- "Salvar como modelo": dentro do Plano Alimentar de qualquer paciente,
+  transforma o plano atual dele em um modelo reutilizável para outros
+  pacientes.
+
+LIMITAÇÕES CONHECIDAS (a evoluir)
+-----------------------------------
+- A equação de Guedes (1985) não entrou: na literatura ela aparece como
+  várias equações específicas por sexo/esporte (não uma única equação
+  generalizada), e não consegui confirmar coeficientes de uma equação
+  "padrão" em fonte confiável. Petroski já cobre o mesmo propósito
+  (validado para brasileiros) e está implementado.
+- Os coeficientes de Petroski foram conferidos em uma calculadora
+  especializada online, não na tese original (Petroski, 1995). Recomendo
+  validar antes de uso clínico extensivo em produção.
+- DRI implementado apenas para adultos (19-50 e 51+), por sexo. Não cobre
+  gestantes, lactantes, crianças/adolescentes — posso adicionar se precisar.
+- Não há tela de edição de dados do paciente depois de cadastrado (dá pra
+  adicionar um botão "Editar" na ficha).
+
+ATUALIZACAO 1.0 - INSTALACAO E DADOS LOCAIS
+--------------------------------------------
+- O aplicativo salva banco, licenca, fotos e documentos em %LOCALAPPDATA%\NutriDesktop.
+- Na primeira abertura, migra automaticamente o banco e as pastas da versao portatil antiga quando encontrados ao lado do executavel.
+- Para criar o instalador Windows, instale o Inno Setup gratuito e execute:
+      gerar_instalador.bat
+  O resultado sera installer\NutriDesktop-Setup.exe.
+- O banco pode ser restaurado pelo menu Configuracoes. O backup inclui documentos e fotos locais.
+
+CSV DE ALIMENTOS
+----------------
+Importe arquivos CSV separados por ; ou , com o cabecalho obrigatorio `descricao`.
+Colunas opcionais: categoria, kcal, proteina, lipideos, carboidrato, fibra.
+O relatorio da importacao informa as linhas invalidas e a base TACO original nao e apagada.
+
+INTERFACE MODERNA (PYSIDE6)
+----------------------------
+A interface principal do NutriDesktop foi migrada para PySide6: dashboard, pacientes, avaliacoes, anamnese, fotos, documentos, agenda, alimentos, planos, receitas, diretrizes, materno-infantil, identidade visual e configuracoes usam a mesma experiencia moderna.
+Todos os dados continuam no mesmo banco em %LOCALAPPDATA%\NutriDesktop.
+
+Para rodar pelo codigo-fonte:
+    pip install -r requirements.txt
+    python app.py

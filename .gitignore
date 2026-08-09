@@ -1,0 +1,10 @@
+﻿__pycache__/
+*.py[cod]
+build/
+dist/
+*.db
+qt_smoke_data/
+test_data/
+.pytest_cache/
+tmp_*
+qt-*.png
