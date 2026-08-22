@@ -1,0 +1,13 @@
+services:
+  licenses:
+    build:
+      context: ..
+      dockerfile: license_server/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - nutridesk-license-data:/data
+    environment:
+      NUTRIDESK_COOKIE_SECURE: "0" # troque para 1 quando usar HTTPS
+volumes:
+  nutridesk-license-data:
