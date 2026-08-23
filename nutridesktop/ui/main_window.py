@@ -3,11 +3,12 @@ from datetime import date,timedelta
 from pathlib import Path
 from PySide6.QtCore import Qt,QTimer,QDate
 from PySide6.QtGui import QKeySequence,QShortcut
-from PySide6.QtWidgets import (QMainWindow,QWidget,QHBoxLayout,QVBoxLayout,QLabel,QPushButton,QStackedWidget,QLineEdit,QComboBox,QTableWidget,QHeaderView,QDialog,QFormLayout,QMessageBox,QFileDialog,QTextEdit,QInputDialog,QCheckBox,QDateEdit,QCalendarWidget,QTabWidget,QGridLayout,QFrame)
+from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QHBoxLayout,QVBoxLayout,QLabel,QPushButton,QStackedWidget,QLineEdit,QComboBox,QTableWidget,QHeaderView,QDialog,QFormLayout,QMessageBox,QFileDialog,QTextEdit,QInputDialog,QCheckBox,QDateEdit,QCalendarWidget,QTabWidget,QGridLayout,QFrame)
 from .common import button,item,show_error
 from .patient_dialog import PatientDialog,FoodSearchDialog
 from .import_dialog import ImportDialog
-from .design_system import APP_STYLE,Card,StatCard,EmptyState,section_title,muted
+from .design_system import APP_STYLE,Card,StatCard,EmptyState,ThemeSelector,section_title,muted
+from nutridesktop.ui_kit.theme import build_stylesheet,get_theme
 from .view_models import NAV_GROUPS,age_label
 from nutridesktop.data.repositories import PatientRepository,AgendaRepository,RecipeRepository,FoodRepository,TemplateRepository,ProtocolRepository
 from nutridesktop.core.validation import required_text,email,iso_date,number
@@ -47,7 +48,11 @@ class PinDialog(QDialog):
 class MainWindow(QMainWindow):
     NAV=['Dashboard','Pacientes','Agenda','Biblioteca','Conta','Configurações']
     def __init__(self):
-        super().__init__();self.setObjectName('nutridesk-main');self.setWindowTitle(f'NutriDesk {APP_VERSION}');self.resize(1440,900);self.setStyleSheet(STYLE)
+        super().__init__();self.setObjectName('nutridesk-main');self.setWindowTitle(f'NutriDesk {APP_VERSION}');self.resize(1440,900)
+        theme_manager=QApplication.instance().property('theme_manager');self.theme_manager=theme_manager
+        if theme_manager:
+            theme_manager.theme_changed.connect(self._apply_theme);self._apply_theme(theme_manager.key)
+        else:self.setStyleSheet(STYLE)
         self.pr=PatientRepository();self.ag=AgendaRepository();self.rr=RecipeRepository();self.fr=FoodRepository();self.tr=TemplateRepository();self.pro=ProtocolRepository();self.gs=GrowthService();self.sec=SecuritySettings();self.local_protection=LocalProtectionService();row=self.sec.get();self.lock=SessionLock(row['auto_lock_minutes'] if row else 15);self.pages={};self._build();self._shortcuts();self.show_page('Dashboard');self.timer=QTimer(self);self.timer.timeout.connect(self.check_lock);self.timer.start(15000)
     def _build(self):
         root=QWidget();root.setObjectName('appRoot');self.setCentralWidget(root);l=QHBoxLayout(root);l.setContentsMargins(0,0,0,0);l.setSpacing(0)
@@ -59,6 +64,8 @@ class MainWindow(QMainWindow):
                 b=button(n,lambda checked=False,name=n:self.show_page(name));sv.addWidget(b);self.nav[n]=b
         sv.addStretch();profile=Card(soft=True);profile.body.addWidget(QLabel('NutriDesk'));profile.body.addWidget(muted(f'v{APP_VERSION}'));sv.addWidget(profile);l.addWidget(side)
         self.stack=QStackedWidget();l.addWidget(self.stack,1)
+    def _apply_theme(self,key):
+        self.setStyleSheet(build_stylesheet(get_theme(key)))
     def _shortcuts(self):
         self.shortcuts=[]
         for seq,callback in [('Ctrl+N',self.new_consultation),('Ctrl+P',lambda:self.show_page('Pacientes')),('Ctrl+K',self.focus_patient_search)]:
@@ -291,6 +298,10 @@ class MainWindow(QMainWindow):
         def tab(title):
             page=QWidget();lay=QVBoxLayout(page);lay.setContentsMargins(8,14,8,8);lay.setSpacing(12);tabs.addTab(page,title);return page,lay
         general,g=tab('Geral');g.addWidget(section_title('NutriDesk'));g.addWidget(muted(f'Versão {APP_VERSION} • dados armazenados localmente'));g.addWidget(muted('Atalhos: Ctrl+N nova consulta • Ctrl+K buscar paciente • Ctrl+P pacientes'));g.addStretch()
+        appearance,ap=tab('Aparência')
+        if self.theme_manager:ap.addWidget(ThemeSelector(self.theme_manager.key,self.theme_manager.apply))
+        else:ap.addWidget(muted('O seletor de tema será habilitado na próxima inicialização.'))
+        ap.addStretch()
         clinic,c=tab('Consultório');c.addWidget(section_title('Preferências do consultório'));c.addWidget(muted('Identidade, dados profissionais e padrões clínicos serão usados nos relatórios e documentos.'));c.addStretch()
         reports,r=tab('Relatórios');r.addWidget(section_title('Relatórios e documentos'));r.addWidget(muted('Escolha o Template padrão para cada tipo. O padrão ainda pode ser substituído ao gerar um documento.'));self.report_default_selectors={}
         for typ in ['Plano','Relatório','Orientação','Receita']:

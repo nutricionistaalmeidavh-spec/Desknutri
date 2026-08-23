@@ -15,6 +15,7 @@ from nutridesktop.ui.account_dialog import AccountActivationDialog
 from nutridesktop.ui.v4_main_window import V4MainWindow as MainWindow
 from nutridesktop.services.account_licensing import AccountLicenseService,AccountLicenseError
 from nutridesktop.services import licensing
+from nutridesktop.ui_kit import ThemeManager
 
 
 def _ensure_license(log) -> bool:
@@ -59,7 +60,9 @@ def main():
             return 0 if ok=='ok' else 2
         except Exception:return 3
     log=configure_logging();db.initialize();seed_taco();seed_legacy_content();DocumentService().migrate_legacy_documents();seed_templates(TemplateRepository());seed_protocols(ProtocolRepository())
-    app=QApplication(sys.argv);install_exception_hook(lambda t,m:QMessageBox.critical(None,t,m))
+    app=QApplication(sys.argv)
+    theme_manager=ThemeManager(app);app.setProperty('theme_manager',theme_manager);theme_manager.apply()
+    install_exception_hook(lambda t,m:QMessageBox.critical(None,t,m))
     sec=SecuritySettings();row=sec.get()
     if row and row['pin_hash']:
         if PinDialog(sec).exec()!=PinDialog.Accepted:return 1
