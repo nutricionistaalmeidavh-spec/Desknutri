@@ -12,6 +12,8 @@ release/
 installer/
 dist/
 build/
+build-ui-kit/
+release-ui-kit/
 .nutridesktop_p3_backup/
 *.nutri
 *.nbak
