@@ -43,6 +43,7 @@ def test_stylesheet_exposes_new_component_contracts():
         'QFrame#timelineItem',
         'QLabel[badge="true"]',
         'QPushButton[variant="primary"]',
+        'QWidget#sidebar QPushButton[variant="primary"]',
         'QCalendarWidget',
     ):
         assert contract in qss
