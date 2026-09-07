@@ -11,9 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      DISPLAY: :99
-      QT_X11_NO_MITSHM: "1"
-      QT_QPA_PLATFORM: xcb
+      QT_QPA_PLATFORM: "vnc:size=1440x900:port=5900"
       PYTHONPATH: ${{ github.workspace }}
       NUTRIDESKTOP_DATA_DIR: ${{ github.workspace }}/.video-demo-data
 
@@ -30,44 +28,41 @@ jobs:
       - name: Install application and recording dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb x11vnc novnc websockify ffmpeg xdotool x11-utils libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+          sudo apt-get install -y novnc websockify ffmpeg netcat-openbsd
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install playwright
           python -m playwright install --with-deps chromium
 
-      - name: Start virtual desktop and real NutriDesk
+      - name: Start real NutriDesk on Qt VNC
         run: |
           mkdir -p /tmp/pwvideo artifacts
-          Xvfb :99 -screen 0 1440x900x24 -ac +extension GLX +render -noreset >/tmp/xvfb.log 2>&1 &
-          sleep 2
-          x11vnc -display :99 -nopw -forever -shared -rfbport 5900 -bg -o /tmp/x11vnc.log
-          NOVNC_WEB="/usr/share/novnc"
-          websockify --web="$NOVNC_WEB" 6080 localhost:5900 >/tmp/websockify.log 2>&1 &
           python tools/video_demo_chromium.py >/tmp/nutridesk-demo.log 2>&1 &
           echo $! > /tmp/nutridesk-demo.pid
-          sleep 5
+          for i in $(seq 1 30); do
+            if nc -z 127.0.0.1 5900; then break; fi
+            sleep 1
+          done
           echo '=== NutriDesk startup log ==='
           cat /tmp/nutridesk-demo.log || true
-          echo '=== X11 window tree ==='
-          xwininfo -root -tree || true
           PID=$(cat /tmp/nutridesk-demo.pid)
           if ! kill -0 "$PID" 2>/dev/null; then
             echo 'NutriDesk process exited before recording.'
             exit 1
           fi
-          WID=$(xdotool search --name "NutriDesk" | head -n 1 || true)
-          if [ -z "$WID" ]; then
-            echo 'NutriDesk window was not found.'
+          if ! nc -z 127.0.0.1 5900; then
+            echo 'Qt VNC port 5900 did not open.'
             exit 1
           fi
-          echo "NutriDesk window id: $WID"
-          xdotool windowactivate --sync "$WID" || true
-          xdotool windowsize "$WID" 1440 900 || true
-          xdotool windowmove "$WID" 0 0 || true
-          ffmpeg -y -f x11grab -video_size 1440x900 -i :99 -frames:v 1 artifacts/x11_probe.png >/tmp/probe.log 2>&1
+          websockify --web=/usr/share/novnc 6080 localhost:5900 >/tmp/websockify.log 2>&1 &
+          echo $! > /tmp/websockify.pid
+          sleep 2
+          if ! nc -z 127.0.0.1 6080; then
+            echo 'noVNC websocket port 6080 did not open.'
+            exit 1
+          fi
 
-      - name: Record the real desktop through Chromium
+      - name: Record the real UI through Chromium
         run: |
           cat > /tmp/record.py <<'PY'
           import asyncio
@@ -89,8 +84,9 @@ jobs:
                       wait_until='domcontentloaded',
                       timeout=30000,
                   )
-                  await page.wait_for_timeout(5000)
-                  await page.wait_for_timeout(48500)
+                  await page.wait_for_timeout(2500)
+                  await page.screenshot(path='artifacts/nutridesk_chromium_start.png')
+                  await page.wait_for_timeout(50000)
                   await page.screenshot(path='artifacts/nutridesk_chromium_last_frame.png')
                   video = page.video
                   await context.close()
@@ -101,8 +97,12 @@ jobs:
           PY
           python /tmp/record.py | tee /tmp/video-path.txt
           WEBM=$(tail -n 1 /tmp/video-path.txt)
-          ffmpeg -y -i "$WEBM" -ss 1.0 -t 50 -c:v libx264 -preset medium -crf 19 -pix_fmt yuv420p -movflags +faststart -an artifacts/NutriDesk_Real_Chromium_50s.mp4
+          ffmpeg -y -i "$WEBM" -ss 2.0 -t 50 -c:v libx264 -preset medium -crf 19 -pix_fmt yuv420p -movflags +faststart -an artifacts/NutriDesk_Real_Chromium_50s.mp4
           ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 artifacts/NutriDesk_Real_Chromium_50s.mp4
+          ffmpeg -y -ss 5 -i artifacts/NutriDesk_Real_Chromium_50s.mp4 -frames:v 1 artifacts/frame_05s.png >/dev/null 2>&1
+          ffmpeg -y -ss 20 -i artifacts/NutriDesk_Real_Chromium_50s.mp4 -frames:v 1 artifacts/frame_20s.png >/dev/null 2>&1
+          ffmpeg -y -ss 35 -i artifacts/NutriDesk_Real_Chromium_50s.mp4 -frames:v 1 artifacts/frame_35s.png >/dev/null 2>&1
+          ffmpeg -y -ss 48 -i artifacts/NutriDesk_Real_Chromium_50s.mp4 -frames:v 1 artifacts/frame_48s.png >/dev/null 2>&1
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
@@ -110,8 +110,12 @@ jobs:
           name: NutriDesk-Real-Chromium-Video
           path: |
             artifacts/NutriDesk_Real_Chromium_50s.mp4
+            artifacts/nutridesk_chromium_start.png
             artifacts/nutridesk_chromium_last_frame.png
-            artifacts/x11_probe.png
+            artifacts/frame_05s.png
+            artifacts/frame_20s.png
+            artifacts/frame_35s.png
+            artifacts/frame_48s.png
           if-no-files-found: error
           retention-days: 7
 
@@ -120,9 +124,5 @@ jobs:
         run: |
           echo '=== NutriDesk ==='
           cat /tmp/nutridesk-demo.log || true
-          echo '=== Xvfb ==='
-          cat /tmp/xvfb.log || true
-          echo '=== x11vnc ==='
-          cat /tmp/x11vnc.log || true
           echo '=== websockify ==='
           cat /tmp/websockify.log || true
