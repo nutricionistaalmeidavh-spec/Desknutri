@@ -26,7 +26,8 @@ def find_iscc():
     return shutil.which('ISCC.exe') or shutil.which('iscc')
 def main():
     ap=argparse.ArgumentParser(description='Pipeline reproduzível de release do NutriDesktop')
-    ap.add_argument('--private-key',required=True);ap.add_argument('--base-url',default='');ap.add_argument('--channel',choices=['stable','beta'],default='stable');ap.add_argument('--notes-file',default='CHANGELOG.md');ap.add_argument('--mandatory',action='store_true');ap.add_argument('--skip-build',action='store_true');ap.add_argument('--installer');ap.add_argument('--rollback-installer');ap.add_argument('--rollback-url');a=ap.parse_args()
+    ap.add_argument('--private-key');ap.add_argument('--allow-unsigned',action='store_true');ap.add_argument('--base-url',default='');ap.add_argument('--channel',choices=['stable','beta'],default='stable');ap.add_argument('--notes-file',default='CHANGELOG.md');ap.add_argument('--mandatory',action='store_true');ap.add_argument('--skip-build',action='store_true');ap.add_argument('--installer');ap.add_argument('--rollback-installer');ap.add_argument('--rollback-url');a=ap.parse_args()
+    if not a.private_key and not a.allow_unsigned:raise SystemExit('Informe --private-key ou use --allow-unsigned para release manual sem manifesto de atualização.')
     run([sys.executable,'-m','pytest','-q']);run([sys.executable,'-m','compileall','-q','app.py','nutridesktop'])
     if not a.skip_build:
         if os.name!='nt':raise SystemExit('Build do EXE/instalador requer Windows. Use --skip-build apenas para validar manifesto em outro SO.')
@@ -45,7 +46,11 @@ def main():
         rb=Path(a.rollback_installer);rb_target=release/rb.name
         if rb.resolve()!=rb_target.resolve():shutil.copy2(rb,rb_target)
         payload['rollback']={'version':'previous','installer_url':a.rollback_url or ((f'{base}/{rb_target.name}') if base else rb_target.name),'sha256':sha(rb_target)}
-    doc={'payload':payload,'signature':sign(payload,a.private_key)};(release/'version.json').write_text(json.dumps(doc,ensure_ascii=False,indent=2),encoding='utf-8')
+    if a.private_key:
+        doc={'payload':payload,'signature':sign(payload,a.private_key)}
+        (release/'version.json').write_text(json.dumps(doc,ensure_ascii=False,indent=2),encoding='utf-8')
+    else:
+        print('Aviso: UPDATE_SIGNING_PRIVATE_KEY_B64 ausente; version.json não será publicado. O instalador e os checksums permanecem válidos para distribuição manual.')
     checks=[f"{sha(p)}  {p.name}" for p in sorted(release.iterdir()) if p.is_file() and p.name!='SHA256SUMS.txt'];(release/'SHA256SUMS.txt').write_text('\n'.join(checks)+'\n',encoding='utf-8')
     print(f'Release pronta em {release}')
 if __name__=='__main__':main()
