@@ -1,3 +1,15 @@
+# NutriDesktop 6.3.0 — Motion, limpeza e release única
+
+- Transições discretas de página em 180 ms, sem alterar handlers, navegação ou persistência.
+- Feedback visual de salvamento em 220 ms para preferências, templates, protocolos e política de backup.
+- Motion pode ser reduzido por `NUTRIDESK_REDUCE_MOTION=1` sem afetar funcionalidade.
+- Removidos scripts one-shot P3/V4, relatórios/matrizes duplicados dessas fases, manifesto estático antigo e documentação obsoleta da chave de update.
+- `nutridesktop/version.py` passa a ser a única fonte da versão atual.
+- Inno Setup não possui mais fallback numérico; o build injeta `APP_VERSION` obrigatoriamente.
+- Build valida que o changelog começa pela mesma `APP_VERSION` antes de empacotar.
+- Janela, sidebar, instalador, artefato e GitHub Release continuam derivados de `APP_VERSION`.
+- Schema SQLite permanece 13; regras clínicas, licenciamento e paleta verde não foram alterados.
+
 # NutriDesktop 6.2.0 — Atualização simplificada via GitHub
 
 - Atualizador passa a consultar diretamente a última GitHub Release estável.
