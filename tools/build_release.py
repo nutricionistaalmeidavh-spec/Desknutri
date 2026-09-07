@@ -57,7 +57,7 @@ def main():
         iscc = find_iscc()
         if not iscc:
             raise SystemExit("Inno Setup ISCC.exe não encontrado")
-        run([iscc, f"/DMyAppVersion={APP_VERSION}", "NutriDesktop.iss"])
+        run([iscc, f'/DMyAppVersion={APP_VERSION}', "NutriDesktop.iss"])
 
     installer = (
         Path(args.installer)
