@@ -28,7 +28,7 @@ jobs:
       - name: Install application and recording dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y novnc websockify ffmpeg netcat-openbsd
+          sudo apt-get install -y novnc websockify ffmpeg netcat-openbsd libegl1 libgl1 libopengl0
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install playwright
