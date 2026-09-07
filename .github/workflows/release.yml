@@ -1,4 +1,5 @@
 name: NutriDesktop Release
+
 on:
   workflow_dispatch:
     inputs:
@@ -14,8 +15,14 @@ on:
         description: "Publicar GitHub Release após gerar os artefatos"
         type: boolean
         default: false
+  push:
+    branches: [main]
+    paths:
+      - "nutridesktop/version.py"
+
 permissions:
   contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -34,16 +41,16 @@ jobs:
           [IO.File]::WriteAllBytes('.release/update_private.pem',[Convert]::FromBase64String($env:KEY_B64))
       - name: Build, test and sign release
         shell: pwsh
-        run: python tools/build_release.py --private-key .release/update_private.pem --base-url "${{ inputs.base_url }}" --channel "${{ inputs.channel }}"
+        run: python tools/build_release.py --private-key .release/update_private.pem --base-url "${{ inputs.base_url || '' }}" --channel "${{ inputs.channel || 'stable' }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: NutriDesktop-${{ inputs.channel }}
+          name: NutriDesktop-${{ inputs.channel || 'stable' }}
           path: release/*
-      - name: Publish GitHub Release (explicit opt-in)
-        if: ${{ inputs.publish }}
+      - name: Publish GitHub Release
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $v = python -c "from nutridesktop.version import APP_VERSION; print(APP_VERSION)"
-          gh release create "v$v" release/* --title "NutriDesktop $v" --notes-file CHANGELOG.md
+          gh release create "v$v" release/* --target "${{ github.sha }}" --title "NutriDesktop $v" --notes-file CHANGELOG.md

@@ -1,3 +1,16 @@
+# NutriDesktop 6.1.0 — Refinamento clínico de UI
+
+- UI Kit canônico em PySide6/QSS com botões primary/secondary/ghost/danger, badges semânticos, toolbar, FormGrid, PatientHeader, Timeline e estados de salvamento.
+- Pacientes reorganizado com toolbar compacta, seleção contextual e redução de espaço vazio.
+- Agenda com datas em `dd/MM/yyyy`, calendário alinhado ao tema e estados visuais consistentes.
+- Prontuário com contexto persistente do paciente, próxima consulta e timeline clínica.
+- Receitas reorganizadas em workspace de duas colunas, preservando ingredientes, categorias, tags, porções e modo de preparo.
+- Shell compacto com sidebar de 218 px, topbar, busca global e atalho `Ctrl+K`.
+- Dashboard operacional priorizando agenda, pendências e retornos antes dos indicadores gerenciais.
+- Paleta verde original preservada; schema SQLite permanece na versão 13.
+- Pipeline de verificação Windows com `compileall`, 96 testes e smoke runtime PySide6 em modo offscreen.
+- Correção de portabilidade do backup ZIP no Windows e guard de compatibilidade para `weight_stature` no `pygrowthstandards 0.1.3` sem substituir cálculos WHO suportados.
+
 # NutriDesktop 3.0.0 — P3
 
 - Atualizador com manifesto Ed25519, SHA-256, health-check e rollback assistido.
