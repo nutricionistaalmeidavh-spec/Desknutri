@@ -101,24 +101,25 @@ def main() -> int:
     win.showMaximized()
 
     # Real application pages, navigated by the application's own show_page flow.
+    # The first seconds remain on Dashboard so Chromium/noVNC can connect cleanly.
     sequence = [
         (0, "Dashboard"),
-        (4300, "Pacientes"),
-        (8600, "Agenda"),
-        (12900, "Alimentos"),
-        (17200, "Crescimento WHO"),
-        (21500, "Materno-infantil"),
-        (25800, "Receitas"),
-        (30100, "Templates"),
-        (34400, "Protocolos"),
-        (38700, "Exportações"),
-        (43000, "Configurações"),
-        (47400, "Dashboard"),
+        (7000, "Pacientes"),
+        (11300, "Agenda"),
+        (15600, "Alimentos"),
+        (19900, "Crescimento WHO"),
+        (24200, "Materno-infantil"),
+        (28500, "Receitas"),
+        (32800, "Templates"),
+        (37100, "Protocolos"),
+        (41400, "Exportações"),
+        (45700, "Configurações"),
+        (50000, "Dashboard"),
     ]
     for delay, page in sequence:
         QTimer.singleShot(delay, lambda p=page: win.show_page(p))
 
-    QTimer.singleShot(53500, app.quit)
+    QTimer.singleShot(65000, app.quit)
     return app.exec()
 
 
