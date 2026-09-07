@@ -74,35 +74,98 @@ def get_theme(key: str | None = None) -> ThemeTokens:
 
 
 def build_stylesheet(t: ThemeTokens) -> str:
-    """QSS global, com contratos semânticos para telas novas e legadas."""
+    """QSS global com contratos semânticos para telas novas e legadas."""
     return f"""
 * {{ font-family: 'Segoe UI', 'Inter', Arial, sans-serif; font-size: 13px; color: {t.text}; }}
 QMainWindow, QDialog, QWidget#appRoot {{ background: {t.bg}; }}
+
+/* Shell */
 QWidget#sidebar {{ background: {t.sidebar_bg}; border-right: 1px solid {t.border}; }}
-QLabel#brand {{ color: {t.text}; font-size: 23px; font-weight: 800; padding: 5px 4px 15px; }}
-QLabel#navSection {{ color: {t.text_muted}; font-size: 10px; font-weight: 700; padding: 14px 7px 4px; letter-spacing: 1px; }}
+QLabel#brand {{ color: {t.text}; font-size: 23px; font-weight: 800; padding: 5px 4px 13px; }}
+QLabel#navSection {{ color: {t.text_muted}; font-size: 10px; font-weight: 700; padding: 13px 7px 4px; letter-spacing: 1px; }}
+QFrame#topbar {{ background: {t.topbar_bg}; border-bottom: 1px solid {t.border}; }}
+QLabel#topbarContext {{ color: {t.text_secondary}; font-size: 12px; font-weight: 650; }}
+QLabel#topbarResult {{ color: {t.text_muted}; font-size: 11px; }}
+QFrame#sidebarProfile {{ background: transparent; border-top: 1px solid {t.border}; }}
+QLineEdit#globalSearch {{ background: {t.surface_alt}; min-height: 20px; }}
+
+/* Buttons */
 QPushButton {{ background: transparent; border: 1px solid transparent; border-radius: {t.radius_sm}px; padding: 8px 12px; color: {t.text}; }}
 QPushButton:hover {{ background: {t.hover}; }}
-QWidget#sidebar QPushButton {{ color: {t.text_secondary}; text-align: left; padding: 10px 12px; }}
+QPushButton:focus {{ border-color: {t.accent}; }}
+QPushButton:disabled {{ color: {t.text_muted}; background: transparent; border-color: {t.border}; }}
+QPushButton[compact="true"] {{ padding: 5px 9px; }}
+QPushButton[variant="primary"], QPushButton[primary="true"] {{ background: {t.accent}; color: {t.accent_contrast}; border-color: {t.accent}; font-weight: 700; text-align: center; }}
+QPushButton[variant="primary"]:hover, QPushButton[primary="true"]:hover {{ background: {t.accent_hover}; border-color: {t.accent_hover}; }}
+QPushButton[variant="secondary"] {{ background: {t.surface}; color: {t.text}; border-color: {t.border}; }}
+QPushButton[variant="secondary"]:hover {{ background: {t.hover}; border-color: {t.border_strong}; }}
+QPushButton[variant="ghost"] {{ background: transparent; color: {t.text_secondary}; border-color: transparent; }}
+QPushButton[variant="ghost"]:hover {{ background: {t.hover}; color: {t.text}; }}
+QPushButton[variant="danger"] {{ background: {t.danger_soft}; color: {t.danger}; border-color: {t.danger}; font-weight: 700; }}
+QPushButton[tone="success"] {{ background: {t.success_soft}; color: {t.success}; border-color: {t.success}; }}
+QPushButton[tone="warning"] {{ background: {t.warning_soft}; color: {t.warning}; border-color: {t.warning}; }}
+QPushButton[tone="danger"] {{ background: {t.danger_soft}; color: {t.danger}; border-color: {t.danger}; }}
+QPushButton[tone="info"] {{ background: {t.info_soft}; color: {t.info}; border-color: {t.info}; }}
+QWidget#sidebar QPushButton {{ color: {t.text_secondary}; text-align: left; padding: 9px 11px; background: transparent; border-color: transparent; }}
 QWidget#sidebar QPushButton:hover {{ color: {t.text}; background: {t.hover}; }}
 QWidget#sidebar QPushButton[active="true"] {{ color: {t.active_text}; background: {t.active}; font-weight: 700; }}
-QPushButton[primary="true"] {{ background: {t.accent}; color: {t.accent_contrast}; border-color: {t.accent}; font-weight: 700; text-align: center; }}
-QPushButton[primary="true"]:hover {{ background: {t.accent_hover}; border-color: {t.accent_hover}; }}
-QLineEdit, QTextEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_sm}px; padding: 8px 10px; }}
-QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus {{ border: 1px solid {t.accent}; }}
+
+/* Inputs e formulários */
+QLineEdit, QTextEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_sm}px; padding: 8px 10px; selection-background-color: {t.active}; }}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border: 1px solid {t.accent}; }}
 QComboBox QAbstractItemView {{ background: {t.surface_elevated}; border: 1px solid {t.border}; selection-background-color: {t.active}; }}
+QLabel#fieldLabel {{ color: {t.text_secondary}; font-size: 12px; font-weight: 650; }}
+QFrame#formSection {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
+QFrame#tableToolbar {{ background: {t.surface_alt}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
+
+/* Dados */
 QTableWidget, QTableView {{ background: {t.surface}; alternate-background-color: {t.surface_alt}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; gridline-color: transparent; selection-background-color: {t.active}; }}
-QHeaderView::section {{ background: {t.surface_alt}; color: {t.text_secondary}; border: 0; border-bottom: 1px solid {t.border}; padding: 10px; font-weight: 700; }}
+QHeaderView::section {{ background: {t.surface_alt}; color: {t.text_secondary}; border: 0; border-bottom: 1px solid {t.border}; padding: 9px 10px; font-weight: 700; }}
 QTableWidget::item {{ border-bottom: 1px solid {t.border}; padding: 7px 10px; }}
+QTableWidget::item:hover, QTableView::item:hover {{ background: {t.hover}; }}
+QTableWidget::item:selected, QTableView::item:selected {{ background: {t.active}; color: {t.active_text}; }}
+
+/* Cards e tipografia */
 QFrame#card {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
 QFrame#softCard {{ background: {t.surface_alt}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
-QLabel#pageTitle {{ font-size: 27px; font-weight: 800; color: {t.text}; }}
+QLabel#pageTitle {{ font-size: 25px; font-weight: 800; color: {t.text}; }}
 QLabel#pageSubtitle, QLabel#muted {{ color: {t.text_muted}; }}
 QLabel#metricLabel {{ color: {t.text_secondary}; font-weight: 600; }}
-QLabel#metricValue {{ color: {t.text}; font-size: 25px; font-weight: 800; }}
+QLabel#metricValue {{ color: {t.text}; font-size: 24px; font-weight: 800; }}
 QLabel#sectionTitle {{ color: {t.text}; font-size: 15px; font-weight: 750; }}
+
+/* Prontuário */
+QFrame#patientHeader {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
+QLabel#patientName {{ color: {t.text}; font-size: 22px; font-weight: 800; }}
+QLabel#patientNext {{ color: {t.accent}; font-size: 12px; font-weight: 650; }}
+QFrame#timelineItem {{ background: transparent; border-bottom: 1px solid {t.border}; }}
+QLabel#timelineMarker {{ color: {t.accent}; font-size: 11px; }}
+QLabel#timelineDate {{ color: {t.text_muted}; font-size: 11px; }}
+QLabel#timelineTitle {{ color: {t.text}; font-weight: 650; }}
+
+/* Badges e feedback */
+QLabel[badge="true"] {{ border-radius: 7px; padding: 4px 8px; font-size: 11px; font-weight: 700; }}
+QLabel[badge="true"][tone="success"] {{ background: {t.success_soft}; color: {t.success}; }}
+QLabel[badge="true"][tone="warning"] {{ background: {t.warning_soft}; color: {t.warning}; }}
+QLabel[badge="true"][tone="danger"] {{ background: {t.danger_soft}; color: {t.danger}; }}
+QLabel[badge="true"][tone="info"] {{ background: {t.info_soft}; color: {t.info}; }}
+QLabel[badge="true"][tone="neutral"] {{ background: {t.surface_alt}; color: {t.text_secondary}; }}
+QLabel#saveState[saveState="saved"] {{ color: {t.success}; }}
+QLabel#saveState[saveState="saving"] {{ color: {t.warning}; }}
+QLabel#saveState[saveState="error"] {{ color: {t.danger}; }}
+
+/* Agenda */
+QCalendarWidget {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
+QCalendarWidget QWidget#qt_calendar_navigationbar {{ background: {t.surface_alt}; }}
+QCalendarWidget QToolButton {{ background: transparent; color: {t.text}; border: 0; padding: 7px; font-weight: 650; }}
+QCalendarWidget QToolButton:hover {{ background: {t.hover}; }}
+QCalendarWidget QMenu {{ background: {t.surface_elevated}; color: {t.text}; }}
+QCalendarWidget QAbstractItemView {{ background: {t.surface}; color: {t.text}; selection-background-color: {t.active}; selection-color: {t.active_text}; outline: 0; }}
+
+/* Tabs, scroll e tooltip */
 QTabWidget::pane {{ border: 0; background: transparent; }}
 QTabBar::tab {{ color: {t.text_muted}; padding: 10px 14px; margin-right: 4px; border-bottom: 2px solid transparent; }}
+QTabBar::tab:hover {{ color: {t.text}; background: {t.hover}; }}
 QTabBar::tab:selected {{ color: {t.accent}; border-bottom-color: {t.accent}; font-weight: 700; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: {t.border_strong}; min-height: 24px; border-radius: 5px; }}
