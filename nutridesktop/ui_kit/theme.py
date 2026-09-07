@@ -109,6 +109,8 @@ QPushButton[tone="info"] {{ background: {t.info_soft}; color: {t.info}; border-c
 QWidget#sidebar QPushButton {{ color: {t.text_secondary}; text-align: left; padding: 9px 11px; background: transparent; border-color: transparent; }}
 QWidget#sidebar QPushButton:hover {{ color: {t.text}; background: {t.hover}; }}
 QWidget#sidebar QPushButton[active="true"] {{ color: {t.active_text}; background: {t.active}; font-weight: 700; }}
+QWidget#sidebar QPushButton[variant="primary"], QWidget#sidebar QPushButton[primary="true"] {{ background: {t.accent}; color: {t.accent_contrast}; border-color: {t.accent}; font-weight: 700; text-align: center; }}
+QWidget#sidebar QPushButton[variant="primary"]:hover, QWidget#sidebar QPushButton[primary="true"]:hover {{ background: {t.accent_hover}; color: {t.accent_contrast}; border-color: {t.accent_hover}; }}
 
 /* Inputs e formulários */
 QLineEdit, QTextEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_sm}px; padding: 8px 10px; selection-background-color: {t.active}; }}
