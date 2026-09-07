@@ -1,3 +1,12 @@
+# NutriDesktop 6.3.1 — Evolução no resumo e paciente demonstrativo
+
+- Gráfico de evolução do paciente passa a aparecer diretamente no Resumo do prontuário.
+- Seletor longitudinal para Peso, IMC, Gordura corporal, Massa magra e Cintura, reutilizando o motor clínico já existente.
+- Aba Evolução e botão Gráfico de evolução permanecem disponíveis e inalterados.
+- Nova instalação vazia recebe um paciente fictício de demonstração com três avaliações e plano exemplo para evidenciar o acompanhamento longitudinal.
+- O paciente demonstrativo é criado uma única vez, não é duplicado e não é inserido em bases que já possuam pacientes.
+- Sem alteração de schema, regras clínicas, licenciamento ou cálculos.
+
 # NutriDesktop 6.3.0 — Motion, limpeza e release única
 
 - Transições discretas de página em 180 ms, sem alterar handlers, navegação ou persistência.
