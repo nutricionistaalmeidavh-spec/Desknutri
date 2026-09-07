@@ -1,0 +1,118 @@
+name: NutriDesk real Chromium demo
+
+on:
+  push:
+    branches:
+      - video-demo-20260907
+  workflow_dispatch:
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DISPLAY: :99
+      QT_X11_NO_MITSHM: "1"
+      QT_QPA_PLATFORM: xcb
+      NUTRIDESKTOP_DATA_DIR: ${{ github.workspace }}/.video-demo-data
+
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install application and recording dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb x11vnc novnc websockify ffmpeg xdotool libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Start virtual desktop and real NutriDesk
+        run: |
+          mkdir -p /tmp/pwvideo artifacts
+          Xvfb :99 -screen 0 1440x900x24 -ac +extension GLX +render -noreset >/tmp/xvfb.log 2>&1 &
+          sleep 2
+          x11vnc -display :99 -nopw -forever -shared -rfbport 5900 -bg -o /tmp/x11vnc.log
+          NOVNC_WEB="/usr/share/novnc"
+          if [ ! -d "$NOVNC_WEB" ]; then NOVNC_WEB="/usr/share/novnc/"; fi
+          websockify --web="$NOVNC_WEB" 6080 localhost:5900 >/tmp/websockify.log 2>&1 &
+          python tools/video_demo_chromium.py >/tmp/nutridesk-demo.log 2>&1 &
+          echo $! > /tmp/nutridesk-demo.pid
+          sleep 3
+          xdotool search --name "NutriDesk" windowactivate --sync %@ || true
+          xdotool search --name "NutriDesk" windowsize %@ 1440 900 || true
+          xdotool search --name "NutriDesk" windowmove %@ 0 0 || true
+
+      - name: Record the real desktop through Chromium
+        run: |
+          cat > /tmp/record.py <<'PY'
+          import asyncio
+          from pathlib import Path
+          from playwright.async_api import async_playwright
+
+          async def main():
+              out = Path('/tmp/pwvideo')
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch(headless=True, args=['--no-sandbox'])
+                  context = await browser.new_context(
+                      viewport={"width": 1440, "height": 900},
+                      record_video_dir=str(out),
+                      record_video_size={"width": 1440, "height": 900},
+                  )
+                  page = await context.new_page()
+                  await page.goto(
+                      'http://127.0.0.1:6080/vnc_lite.html?autoconnect=true&resize=scale&view_only=true',
+                      wait_until='domcontentloaded',
+                      timeout=30000,
+                  )
+                  await page.wait_for_timeout(5000)
+                  await page.evaluate("""
+                    () => {
+                      document.documentElement.style.background = '#0b0d10';
+                      document.body.style.margin = '0';
+                      document.body.style.overflow = 'hidden';
+                    }
+                  """)
+                  await page.wait_for_timeout(48500)
+                  await page.screenshot(path='artifacts/nutridesk_chromium_last_frame.png')
+                  video = page.video
+                  await context.close()
+                  await browser.close()
+                  print(await video.path())
+
+          asyncio.run(main())
+          PY
+          python /tmp/record.py | tee /tmp/video-path.txt
+          WEBM=$(tail -n 1 /tmp/video-path.txt)
+          ffmpeg -y -i "$WEBM" -ss 1.0 -t 50 -c:v libx264 -preset medium -crf 19 -pix_fmt yuv420p -movflags +faststart -an artifacts/NutriDesk_Real_Chromium_50s.mp4
+          ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 artifacts/NutriDesk_Real_Chromium_50s.mp4
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NutriDesk-Real-Chromium-Video
+          path: |
+            artifacts/NutriDesk_Real_Chromium_50s.mp4
+            artifacts/nutridesk_chromium_last_frame.png
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Dump diagnostics on failure
+        if: failure()
+        run: |
+          echo '=== NutriDesk ==='
+          cat /tmp/nutridesk-demo.log || true
+          echo '=== Xvfb ==='
+          cat /tmp/xvfb.log || true
+          echo '=== x11vnc ==='
+          cat /tmp/x11vnc.log || true
+          echo '=== websockify ==='
+          cat /tmp/websockify.log || true
