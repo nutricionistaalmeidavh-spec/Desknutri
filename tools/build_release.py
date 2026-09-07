@@ -27,6 +27,16 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def validate_version_contract() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").lstrip()
+    expected_heading = f"# NutriDesktop {APP_VERSION}"
+    if not changelog.startswith(expected_heading):
+        raise SystemExit(
+            f"CHANGELOG.md precisa iniciar com {expected_heading!r}; "
+            "nutridesktop/version.py é a fonte única da versão atual."
+        )
+
+
 def find_iscc():
     candidates = [
         os.environ.get("ISCC"),
@@ -47,6 +57,7 @@ def main():
     parser.add_argument("--installer")
     args = parser.parse_args()
 
+    validate_version_contract()
     run([sys.executable, "-m", "pytest", "-q"])
     run([sys.executable, "-m", "compileall", "-q", "app.py", "nutridesktop"])
 
