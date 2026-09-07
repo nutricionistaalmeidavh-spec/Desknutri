@@ -63,7 +63,7 @@ def test_canonical_replacements_for_removed_delivery_scripts_exist():
         "nutridesktop/services/auto_backup.py",
         "nutridesktop/services/account_licensing.py",
         "nutridesktop/ui/auto_update_features.py",
-        "license_server/app.py",
+        "license_server/main.py",
         ".github/workflows/verify.yml",
         ".github/workflows/release.yml",
     ]
