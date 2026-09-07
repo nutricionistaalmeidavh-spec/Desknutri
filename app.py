@@ -12,7 +12,7 @@ from nutridesktop.services.security_settings import SecuritySettings
 from nutridesktop.services.documents import DocumentService
 from nutridesktop.ui.main_window import PinDialog
 from nutridesktop.ui.account_dialog import AccountActivationDialog
-from nutridesktop.ui.v4_main_window import V4MainWindow as MainWindow
+from nutridesktop.ui.application_window import MainWindow
 from nutridesktop.services.account_licensing import AccountLicenseService,AccountLicenseError
 from nutridesktop.services import licensing
 from nutridesktop.ui_kit import ThemeManager
