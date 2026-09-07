@@ -19,10 +19,6 @@ on:
     branches: [main]
     paths:
       - "nutridesktop/version.py"
-      - "tools/build_release.py"
-      - "nutridesktop.spec"
-      - "NutriDesktop.iss"
-      - ".github/workflows/release.yml"
 
 permissions:
   contents: write
@@ -41,21 +37,19 @@ jobs:
           python -m pip install -r license_server/requirements.txt
           python -m pip install httpx2
       - run: choco install innosetup -y
-      - name: Build, test and package release
+      - name: Build, test and package signed release
         shell: pwsh
         env:
           KEY_B64: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY_B64 }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:KEY_B64)) {
+            throw "Secret UPDATE_SIGNING_PRIVATE_KEY_B64 ausente. Release automática recusada."
+          }
           $baseUrl = "${{ inputs.base_url || '' }}"
           $channel = "${{ inputs.channel || 'stable' }}"
-          if ([string]::IsNullOrWhiteSpace($env:KEY_B64)) {
-            Write-Host "UPDATE_SIGNING_PRIVATE_KEY_B64 ausente: publicando instalador + checksums sem version.json."
-            python tools/build_release.py --allow-unsigned --base-url "$baseUrl" --channel "$channel"
-          } else {
-            New-Item -ItemType Directory -Force .release | Out-Null
-            [IO.File]::WriteAllBytes('.release/update_private.pem',[Convert]::FromBase64String($env:KEY_B64))
-            python tools/build_release.py --private-key .release/update_private.pem --base-url "$baseUrl" --channel "$channel"
-          }
+          New-Item -ItemType Directory -Force .release | Out-Null
+          [IO.File]::WriteAllBytes('.release/update_private.pem',[Convert]::FromBase64String($env:KEY_B64))
+          python tools/build_release.py --private-key .release/update_private.pem --base-url "$baseUrl" --channel "$channel"
       - uses: actions/upload-artifact@v4
         with:
           name: NutriDesktop-${{ inputs.channel || 'stable' }}
