@@ -39,7 +39,15 @@ COMPARISON_TABS = (
 class ComparisonStatCard(QFrame):
     """Card compacto de primeira → última avaliação, como no layout aprovado."""
 
-    def __init__(self, label: str, first, last, unit: str = "", parent=None):
+    def __init__(
+        self,
+        label: str,
+        first,
+        last,
+        unit: str = "",
+        delta_unit: str | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setObjectName("comparisonCard")
         lay = QVBoxLayout(self)
@@ -50,7 +58,7 @@ class ComparisonStatCard(QFrame):
         title.setObjectName("metricLabel")
         value = QLabel(self._pair(first, last, unit))
         value.setObjectName("comparisonValue")
-        delta = QLabel(self._delta(first, last, unit))
+        delta = QLabel(self._delta(first, last, unit if delta_unit is None else delta_unit))
         delta.setObjectName("comparisonDelta")
         lay.addWidget(title)
         lay.addWidget(value)
@@ -92,7 +100,7 @@ class PatientEvolutionCard(Card):
         title_box = QVBoxLayout()
         title_box.setSpacing(2)
         title_box.addWidget(section_title("Evolução"))
-        title_box.addWidget(muted("Compare até as avaliações registradas do paciente."))
+        title_box.addWidget(muted("Compare as avaliações registradas do paciente."))
         header.addLayout(title_box, 1)
         header.addWidget(muted(self._range_label()))
         self.body.addLayout(header)
@@ -149,19 +157,20 @@ class PatientEvolutionCard(Card):
         grid.setVerticalSpacing(8)
 
         specs = (
-            ("Peso", "peso", "kg"),
-            ("Massa gorda", "massa_gorda", "kg"),
-            ("Massa livre de gordura", "massa_magra", "kg"),
-            ("% Gordura", "pg_final", "p.p."),
-            ("Cintura", "cintura", "cm"),
+            ("Peso", "peso", "kg", None),
+            ("Massa gorda", "massa_gorda", "kg", None),
+            ("Massa livre de gordura", "massa_magra", "kg", None),
+            ("% Gordura", "pg_final", "%", "p.p."),
+            ("Cintura", "cintura", "cm", None),
         )
-        for col, (label, key, unit) in enumerate(specs):
+        for col, (label, key, unit, delta_unit) in enumerate(specs):
             grid.addWidget(
                 ComparisonStatCard(
                     label,
                     self._value(first, key),
                     self._value(last, key),
                     unit,
+                    delta_unit,
                     self,
                 ),
                 0,
