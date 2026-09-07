@@ -36,7 +36,7 @@ def create_backup(destination,password=None,database:Database=db,trigger="manual
                 if folder.exists():
                     for p in folder.rglob('*'):
                         if p.is_file():
-                            arc=str(Path(name)/p.relative_to(folder)); z.write(p,arc); files.append({'path':arc,'sha256':_sha(p)})
+                            arc=(Path(name)/p.relative_to(folder)).as_posix(); z.write(p,arc); files.append({'path':arc,'sha256':_sha(p)})
             manifest={'format':2,'app_version':APP_VERSION,'schema_version':SCHEMA_VERSION,'created_at':datetime.now(timezone.utc).isoformat(),'files':files}
             z.writestr(MANIFEST,json.dumps(manifest,ensure_ascii=False,indent=2))
         raw=(td/'backup.zip').read_bytes()
