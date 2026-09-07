@@ -6,6 +6,7 @@ than maintaining approximate medians in application code.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from inspect import signature
 from math import erf,sqrt
 
 @dataclass
@@ -46,6 +47,21 @@ def _api():
     except ImportError as exc:
         raise RuntimeError("Instale pygrowthstandards>=0.1.3 para cálculos WHO oficiais.") from exc
 
+def _supports_weight_stature(api):
+    """A 0.1.3 publicada não expõe ainda os eixos x da API de weight/stature.
+
+    Só habilitamos esse indicador quando zscore e percentile aceitarem
+    explicitamente `x_var_type` e `x_value`. Os demais indicadores WHO não são
+    alterados nem aproximados quando a capacidade opcional não existe.
+    """
+    try:
+        for fn in (api.zscore,api.percentile):
+            params=signature(fn).parameters
+            if "x_var_type" not in params or "x_value" not in params:return False
+        return True
+    except (TypeError,ValueError):
+        return False
+
 def assess(sex:str,age_days:int,weight_kg=None,height_cm=None):
     if sex not in {"M","F"}: raise ValueError("Sexo deve ser M ou F")
     if age_days<0 or age_days>int(19*365.25)+10: raise ValueError("WHO 2006/2007 suportado até 19 anos")
@@ -64,5 +80,8 @@ def assess(sex:str,age_days:int,weight_kg=None,height_cm=None):
     if weight_kg is not None and height_cm is not None:
         bmi=weight_kg/(height_cm/100)**2; out["bmi_age"]=calc("bmi",bmi,"bmi")
         if age_days <= int(5*365.25):
-            out["weight_height"]=calc("weight_stature",weight_kg,"weight_stature",x_var_type="stature",x_value=height_cm)
+            if _supports_weight_stature(api):
+                out["weight_height"]=calc("weight_stature",weight_kg,"weight_stature",x_var_type="stature",x_value=height_cm)
+            else:
+                out["weight_height"]=None
     return out
