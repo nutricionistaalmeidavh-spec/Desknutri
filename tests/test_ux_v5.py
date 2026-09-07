@@ -54,7 +54,6 @@ def test_friendly_error_hides_raw_network_details():
     assert 'HTTPSConnectionPool' not in msg
 
 
-
 from pathlib import Path
 import ast
 
@@ -132,8 +131,10 @@ def test_patient_can_mark_latest_pending_plan_as_sent(tmp_path):
 def test_v5_installer_and_visible_brand_use_nutridesk():
     iss=_src('NutriDesktop.iss')
     assert '#define MyAppName "NutriDesk"' in iss
-    assert '#define MyAppVersion "6.0.0"' in iss
+    assert '#ifndef MyAppVersion' in iss
     assert 'Description: "Abrir NutriDesk"' in iss
+    build=_src('tools/build_release.py')
+    assert "f'/DMyAppVersion={APP_VERSION}'" in build
     main=_src('nutridesktop/ui/main_window.py')
     assert 'NutriDesk Backup (*.nbak)' in main
     assert 'NutriDesktop Backup (*.nbak)' not in main

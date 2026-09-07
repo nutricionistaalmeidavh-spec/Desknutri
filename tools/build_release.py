@@ -33,7 +33,7 @@ def main():
         if os.name!='nt':raise SystemExit('Build do EXE/instalador requer Windows. Use --skip-build apenas para validar manifesto em outro SO.')
         run([sys.executable,'-m','PyInstaller','--clean','nutridesktop.spec']);iscc=find_iscc()
         if not iscc:raise SystemExit('Inno Setup ISCC.exe não encontrado')
-        run([iscc,'NutriDesktop.iss'])
+        run([iscc,f'/DMyAppVersion={APP_VERSION}','NutriDesktop.iss'])
     installer=Path(a.installer) if a.installer else ROOT/'installer'/f'NutriDesktop-Setup-{APP_VERSION}.exe'
     if not installer.exists():raise SystemExit(f'Instalador ausente: {installer}')
     release=ROOT/'release';release.mkdir(exist_ok=True);target=release/installer.name
