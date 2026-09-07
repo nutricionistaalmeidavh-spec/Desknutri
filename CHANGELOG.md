@@ -1,3 +1,13 @@
+# NutriDesktop 6.2.0 — Atualização simplificada via GitHub
+
+- Atualizador passa a consultar diretamente a última GitHub Release estável.
+- Nova versão é apenas avisada; o usuário escolhe se deseja atualizar agora ou depois.
+- Download do instalador continua validado por SHA-256 usando `SHA256SUMS.txt` da própria Release.
+- Instalação deixa de ser silenciosa e abre o instalador normal do Windows.
+- Removida a dependência de `version.json`, chave Ed25519 e `UPDATE_SIGNING_PRIVATE_KEY_B64` para releases futuras.
+- Pipeline de release passa a publicar instalador + checksum sem Secrets adicionais.
+- Configuração antiga do manifesto padrão é migrada em runtime sem alterar o schema SQLite, que permanece na versão 13.
+
 # NutriDesktop 6.1.0 — Refinamento clínico de UI
 
 - UI Kit canônico em PySide6/QSS com botões primary/secondary/ghost/danger, badges semânticos, toolbar, FormGrid, PatientHeader, Timeline e estados de salvamento.
