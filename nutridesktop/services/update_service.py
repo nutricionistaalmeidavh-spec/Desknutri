@@ -1,32 +1,23 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
 import subprocess
-import sys
-import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
-from nutridesktop.core.paths import CONFIG_DIR, UPDATE_DIR, resource_dir
+from nutridesktop.core.paths import UPDATE_DIR
 from nutridesktop.data.database import Database, db
 from nutridesktop.version import APP_VERSION, RELEASE_CHANNEL
 from .app_settings import AppSettings
 
-DEFAULT_MANIFEST_URL = (
-    "https://github.com/nutricionistaalmeidavh-spec/Desknutri/"
-    "releases/latest/download/version.json"
+DEFAULT_RELEASE_API = (
+    "https://api.github.com/repos/nutricionistaalmeidavh-spec/Desknutri/releases/latest"
 )
-PUBLIC_KEY_LOCATIONS = [
-    CONFIG_DIR / "update_public.pem",
-    resource_dir() / "config" / "update_public.pem",
-]
+LEGACY_MANIFEST_SUFFIX = "/releases/latest/download/version.json"
+CHECKSUM_ASSET = "SHA256SUMS.txt"
 RESULT_FILE = UPDATE_DIR / "last_update_result.json"
 
 
@@ -39,35 +30,25 @@ class UpdateInfo:
     notes: str = ""
     mandatory: bool = False
     published_at: str = ""
-    rollback: dict | None = None
-
-
-def _b64d(s: str) -> bytes:
-    return base64.urlsafe_b64decode(s + "=" * ((4 - len(s) % 4) % 4))
-
-
-def _canonical(payload: dict) -> bytes:
-    return json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
+    release_url: str = ""
 
 
 def _version_tuple(v: str):
-    core = v.split("-", 1)[0]
+    core = v.lstrip("vV").split("-", 1)[0]
     parts = []
-    for x in core.split("."):
+    for value in core.split("."):
         try:
-            parts.append(int(x))
+            parts.append(int(value))
         except ValueError:
             parts.append(0)
     return tuple((parts + [0, 0, 0])[:3])
 
 
-def is_newer(candidate, current=APP_VERSION):
+def is_newer(candidate: str, current: str = APP_VERSION) -> bool:
     return _version_tuple(candidate) > _version_tuple(current)
 
 
-def sha256_file(path: Path):
+def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
@@ -75,108 +56,123 @@ def sha256_file(path: Path):
     return h.hexdigest()
 
 
-def _load_public_key() -> Ed25519PublicKey:
-    for p in PUBLIC_KEY_LOCATIONS:
-        if p.exists():
-            key = serialization.load_pem_public_key(p.read_bytes())
-            if not isinstance(key, Ed25519PublicKey):
-                raise ValueError("Chave pública de atualização não é Ed25519")
-            return key
-    raise FileNotFoundError(
-        "Configure config/update_public.pem antes de habilitar atualizações comerciais."
+def _request(url: str):
+    return urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": f"NutriDesk/{APP_VERSION}",
+            "Accept": "application/vnd.github+json",
+        },
     )
 
 
 def _read_url(url: str) -> bytes:
-    p = Path(url)
-    if p.exists():
-        return p.read_bytes()
-    with urllib.request.urlopen(url, timeout=12) as r:
-        return r.read()
+    path = Path(url)
+    if path.exists():
+        return path.read_bytes()
+    with urllib.request.urlopen(_request(url), timeout=20) as response:
+        return response.read()
 
 
-def verify_manifest_document(doc: dict) -> dict:
-    payload = doc.get("payload")
-    signature = doc.get("signature")
-    if not isinstance(payload, dict) or not signature:
-        raise ValueError("Manifesto de atualização inválido")
-    if os.environ.get("NUTRIDESKTOP_ALLOW_UNSIGNED_UPDATES") == "1" and signature == "DEV":
-        return payload
-    _load_public_key().verify(_b64d(signature), _canonical(payload))
-    return payload
+def _read_json(url: str) -> dict:
+    return json.loads(_read_url(url).decode("utf-8"))
+
+
+def _asset(release: dict, name: str) -> dict | None:
+    for item in release.get("assets") or []:
+        if item.get("name") == name:
+            return item
+    return None
+
+
+def _checksum_for(text: str, filename: str) -> str | None:
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2:
+            continue
+        digest, listed = parts
+        listed = listed.strip().lstrip("*")
+        if listed == filename and len(digest) == 64:
+            return digest.lower()
+    return None
 
 
 class UpdateService:
-    MANIFEST_KEY = "p3.update_manifest_url"
+    # Mantemos a chave histórica de configuração para não criar migração de schema.
+    SOURCE_KEY = "p3.update_manifest_url"
+    MANIFEST_KEY = SOURCE_KEY
     AUTO_KEY = "p3.update_auto"
-    AUTO_INSTALL_KEY = "p3.update_auto_install"
     CHANNEL_KEY = "p3.update_channel"
 
     def __init__(self, database: Database = db):
         self.db = database
         self.settings = AppSettings(database)
 
-    def manifest_url(self):
-        return self.settings.get(self.MANIFEST_KEY, "") or DEFAULT_MANIFEST_URL
+    def release_api_url(self) -> str:
+        saved = (self.settings.get(self.SOURCE_KEY, "") or "").strip()
+        if not saved or saved.endswith(LEGACY_MANIFEST_SUFFIX):
+            return DEFAULT_RELEASE_API
+        return saved
+
+    # Aliases preservados para chamadas legadas da UI/P3.
+    def manifest_url(self) -> str:
+        return self.release_api_url()
 
     def set_manifest_url(self, url):
-        value = (url or "").strip()
-        self.settings.set(self.MANIFEST_KEY, value)
+        self.settings.set(self.SOURCE_KEY, (url or "").strip())
 
-    def auto_check(self):
+    def auto_check(self) -> bool:
         return bool(self.settings.get(self.AUTO_KEY, True))
 
     def set_auto_check(self, value):
         self.settings.set(self.AUTO_KEY, bool(value))
 
-    def auto_install(self):
-        return bool(self.settings.get(self.AUTO_INSTALL_KEY, True))
-
-    def set_auto_install(self, value):
-        self.settings.set(self.AUTO_INSTALL_KEY, bool(value))
-
-    def channel(self):
+    def channel(self) -> str:
         return self.settings.get(self.CHANNEL_KEY, RELEASE_CHANNEL) or RELEASE_CHANNEL
 
     def set_channel(self, value):
-        self.settings.set(self.CHANNEL_KEY, value if value in {"stable", "beta"} else "stable")
+        # GitHub /releases/latest representa o canal estável. Mantemos a API por compatibilidade.
+        self.settings.set(self.CHANNEL_KEY, "stable")
 
     def check(self, url=None) -> UpdateInfo | None:
-        url = (url or self.manifest_url()).strip()
-        if not url:
+        source = (url or self.release_api_url()).strip()
+        if not source:
             return None
-        doc = json.loads(_read_url(url).decode("utf-8"))
-        payload = verify_manifest_document(doc)
-        if payload.get("product") != "NutriDesktop":
-            raise ValueError("Manifesto não pertence ao NutriDesk")
-        if payload.get("channel", "stable") != self.channel():
-            return None
-        if not is_newer(str(payload["version"])):
+        if source.endswith(LEGACY_MANIFEST_SUFFIX):
+            source = DEFAULT_RELEASE_API
+
+        release = _read_json(source)
+        if release.get("draft") or release.get("prerelease"):
             return None
 
-        def resolve(ref):
-            if not ref:
-                return ref
-            if Path(url).exists():
-                return (
-                    str((Path(url).resolve().parent / ref).resolve())
-                    if not Path(ref).is_absolute()
-                    else ref
-                )
-            return urllib.parse.urljoin(url, ref)
+        version = str(release.get("tag_name") or release.get("name") or "").lstrip("vV")
+        if not version or not is_newer(version):
+            return None
 
-        rb = dict(payload.get("rollback") or {})
-        if rb.get("installer_url"):
-            rb["installer_url"] = resolve(rb["installer_url"])
+        installer_name = f"NutriDesktop-Setup-{version}.exe"
+        installer = _asset(release, installer_name)
+        checksums = _asset(release, CHECKSUM_ASSET)
+        if not installer:
+            raise ValueError(f"Release {version} não contém {installer_name}")
+        if not checksums:
+            raise ValueError(f"Release {version} não contém {CHECKSUM_ASSET}")
+
+        checksum_text = _read_url(checksums["browser_download_url"]).decode("utf-8")
+        digest = _checksum_for(checksum_text, installer_name)
+        if not digest:
+            raise ValueError(f"Checksum de {installer_name} não encontrado em {CHECKSUM_ASSET}")
+
         return UpdateInfo(
-            version=str(payload["version"]),
-            channel=payload.get("channel", "stable"),
-            installer_url=resolve(payload["installer_url"]),
-            sha256=payload["sha256"].lower(),
-            notes=payload.get("notes", ""),
-            mandatory=bool(payload.get("mandatory", False)),
-            published_at=payload.get("published_at", ""),
-            rollback=rb or None,
+            version=version,
+            channel="stable",
+            installer_url=installer["browser_download_url"],
+            sha256=digest,
+            notes=release.get("body") or "",
+            published_at=release.get("published_at") or "",
+            release_url=release.get("html_url") or "",
         )
 
     def _download(self, url: str, dest: Path, expected: str):
@@ -185,7 +181,7 @@ class UpdateService:
         actual = sha256_file(dest)
         if actual.lower() != expected.lower():
             dest.unlink(missing_ok=True)
-            raise ValueError("SHA-256 do instalador não confere com o manifesto assinado")
+            raise ValueError("SHA-256 do instalador não confere com a Release do GitHub")
         return dest
 
     def stage(self, info: UpdateInfo):
@@ -194,105 +190,44 @@ class UpdateService:
             UPDATE_DIR / f"NutriDesktop-Setup-{info.version}.exe",
             info.sha256,
         )
-        rollback_installer = None
-        rb = info.rollback or {}
-        if rb.get("installer_url") and rb.get("sha256"):
-            try:
-                rollback_installer = self._download(
-                    rb["installer_url"],
-                    UPDATE_DIR
-                    / f"NutriDesktop-Setup-{rb.get('version', APP_VERSION)}-rollback.exe",
-                    rb["sha256"],
-                )
-            except Exception:
-                rollback_installer = None
-        return installer, rollback_installer
+        # Segundo item mantido para compatibilidade com a chamada P3 anterior.
+        return installer, None
 
-    def _runner_script(self):
-        p = UPDATE_DIR / "apply_update.ps1"
-        p.write_text(
-            r'''param([int]$ParentPid,[string]$Installer,[string]$AppExe,[string]$RollbackInstaller,[string]$ResultFile,[string]$FromVersion,[string]$TargetVersion)
-$ErrorActionPreference='Stop'
-function Write-Result([string]$status,[string]$details){
-  $obj=@{from_version=$FromVersion;to_version=$TargetVersion;status=$status;details=$details;time=(Get-Date).ToString('o')}
-  $obj | ConvertTo-Json -Compress | Set-Content -Encoding UTF8 $ResultFile
-}
-try {
-  try { Wait-Process -Id $ParentPid -Timeout 60 -ErrorAction SilentlyContinue } catch {}
-  $p=Start-Process -FilePath $Installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS' -Wait -PassThru
-  if($p.ExitCode -ne 0){ throw "installer_exit_$($p.ExitCode)" }
-  $h=Start-Process -FilePath $AppExe -ArgumentList '--healthcheck' -Wait -PassThru
-  if($h.ExitCode -eq 0){ Write-Result 'success' 'healthcheck_ok'; Start-Process -FilePath $AppExe; exit 0 }
-  if($RollbackInstaller -and (Test-Path $RollbackInstaller)){
-    $r=Start-Process -FilePath $RollbackInstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS' -Wait -PassThru
-    $rh=Start-Process -FilePath $AppExe -ArgumentList '--healthcheck' -Wait -PassThru
-    if($r.ExitCode -eq 0 -and $rh.ExitCode -eq 0){ Write-Result 'rolled_back' 'new_version_healthcheck_failed'; Start-Process -FilePath $AppExe; exit 2 }
-  }
-  Write-Result 'failed' 'healthcheck_failed_without_successful_rollback'; exit 3
-} catch { Write-Result 'failed' $_.Exception.Message; exit 4 }
-''',
-            encoding="utf-8",
-        )
-        return p
-
-    def launch_staged(
-        self,
-        info: UpdateInfo,
-        installer: Path,
-        rollback_installer: Path | None = None,
-    ):
+    def launch_staged(self, info: UpdateInfo, installer: Path, rollback_installer=None):
         if os.name != "nt":
-            raise RuntimeError("Aplicação automática de update está disponível no Windows.")
-        app_exe = Path(
-            sys.executable if getattr(sys, "frozen", False) else sys.argv[0]
-        ).resolve()
-        script = self._runner_script()
-        args = [
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(script),
-            "-ParentPid",
-            str(os.getpid()),
-            "-Installer",
-            str(installer),
-            "-AppExe",
-            str(app_exe),
-            "-RollbackInstaller",
-            str(rollback_installer or ""),
-            "-ResultFile",
-            str(RESULT_FILE),
-            "-FromVersion",
-            APP_VERSION,
-            "-TargetVersion",
-            info.version,
-        ]
-        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(
-            subprocess, "DETACHED_PROCESS", 0
-        )
-        subprocess.Popen(args, creationflags=flags, close_fds=True)
+            raise RuntimeError("O instalador automático está disponível no Windows.")
+        # Instalação propositalmente interativa: o usuário controla e confirma o processo.
+        subprocess.Popen([str(installer)], close_fds=True)
+        self._record_history(APP_VERSION, info.version, "installer_started", info.release_url)
         return True
 
+    def _record_history(self, from_version: str, to_version: str, status: str, details: str = ""):
+        with self.db.transaction() as c:
+            c.execute(
+                "INSERT INTO app_update_history(from_version,to_version,status,manifest_url,details_json) VALUES(?,?,?,?,?)",
+                (
+                    from_version,
+                    to_version,
+                    status,
+                    self.release_api_url(),
+                    json.dumps({"details": details}, ensure_ascii=False),
+                ),
+            )
+
     def record_result(self):
+        # Compatibilidade com updates P3 antigos que possam ter deixado resultado pendente.
         if not RESULT_FILE.exists():
             return None
         try:
             data = json.loads(RESULT_FILE.read_text(encoding="utf-8-sig"))
         except Exception:
             return None
-        with self.db.transaction() as c:
-            c.execute(
-                "INSERT INTO app_update_history(from_version,to_version,status,manifest_url,details_json) VALUES(?,?,?,?,?)",
-                (
-                    data.get("from_version"),
-                    data.get("to_version"),
-                    data.get("status"),
-                    self.manifest_url(),
-                    json.dumps(data, ensure_ascii=False),
-                ),
-            )
+        self._record_history(
+            data.get("from_version") or "",
+            data.get("to_version") or "",
+            data.get("status") or "legacy",
+            data.get("details") or "",
+        )
         RESULT_FILE.unlink(missing_ok=True)
         return data
 
