@@ -1,49 +1,55 @@
 from pathlib import Path
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 from nutridesktop.data.database import Database
-from nutridesktop.services.update_service import DEFAULT_MANIFEST_URL, UpdateService
+from nutridesktop.services.update_service import DEFAULT_RELEASE_API, UpdateService
 from nutridesktop.ui.application_window import MainWindow
-from nutridesktop.ui.auto_update_features import SignedAutoUpdateMixin
+from nutridesktop.ui.auto_update_features import GitHubReleaseUpdateMixin
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_default_manifest_points_to_latest_github_release(tmp_path):
+def test_default_source_points_to_latest_github_release(tmp_path):
     db = Database(tmp_path / "updates.db")
     db.initialize()
     svc = UpdateService(db)
-    assert svc.manifest_url() == DEFAULT_MANIFEST_URL
-    assert DEFAULT_MANIFEST_URL.endswith("/releases/latest/download/version.json")
+    assert svc.release_api_url() == DEFAULT_RELEASE_API
+    assert DEFAULT_RELEASE_API.endswith("/releases/latest")
 
 
-def test_auto_install_defaults_to_enabled_and_is_configurable(tmp_path):
+def test_legacy_default_manifest_is_migrated_without_schema_change(tmp_path):
     db = Database(tmp_path / "updates.db")
     db.initialize()
     svc = UpdateService(db)
-    assert svc.auto_install() is True
-    svc.set_auto_install(False)
-    assert svc.auto_install() is False
+    svc.set_manifest_url(
+        "https://github.com/nutricionistaalmeidavh-spec/Desknutri/releases/latest/download/version.json"
+    )
+    assert svc.release_api_url() == DEFAULT_RELEASE_API
 
 
-def test_packaged_public_update_key_is_ed25519():
-    key_path = ROOT / "config" / "update_public.pem"
-    assert key_path.exists()
-    key = serialization.load_pem_public_key(key_path.read_bytes())
-    assert isinstance(key, Ed25519PublicKey)
-
-
-def test_canonical_window_uses_signed_auto_update_mixin_first():
+def test_canonical_window_uses_github_release_update_mixin_first():
     mro = MainWindow.mro()
-    assert SignedAutoUpdateMixin in mro
-    assert mro.index(SignedAutoUpdateMixin) < mro.index(MainWindow.__bases__[1])
+    assert GitHubReleaseUpdateMixin in mro
+    assert mro.index(GitHubReleaseUpdateMixin) < mro.index(MainWindow.__bases__[1])
 
 
-def test_release_workflow_requires_signing_secret():
+def test_updater_is_user_confirmed_not_silent():
+    src = (ROOT / "nutridesktop" / "ui" / "auto_update_features.py").read_text(encoding="utf-8")
+    service = (ROOT / "nutridesktop" / "services" / "update_service.py").read_text(encoding="utf-8")
+    assert "QMessageBox.question" in src
+    assert "Deseja baixar e abrir o instalador agora?" in src
+    assert "/VERYSILENT" not in service
+    assert "subprocess.Popen([str(installer)]" in service
+
+
+def test_release_workflow_needs_no_update_signing_secret():
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-    assert "UPDATE_SIGNING_PRIVATE_KEY_B64" in workflow
-    assert "Release automática recusada" in workflow
-    assert "--allow-unsigned" not in workflow
+    build = (ROOT / "tools" / "build_release.py").read_text(encoding="utf-8")
+    assert "UPDATE_SIGNING_PRIVATE_KEY_B64" not in workflow
+    assert "private-key" not in build
+    assert "version.json" not in build
+    assert "SHA256SUMS.txt" in build
+
+
+def test_packaged_update_public_key_is_no_longer_required():
+    assert not (ROOT / "config" / "update_public.pem").exists()
