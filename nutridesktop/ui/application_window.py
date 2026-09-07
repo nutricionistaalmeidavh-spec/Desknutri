@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from .auto_update_features import GitHubReleaseUpdateMixin
+from .final_polish import FinalPolishMixin
 from .main_window import MainWindow as CoreMainWindow
 from .refinement import UiRefinementMixin
 from .window_features import AccountFeaturesMixin, OperationalFeaturesMixin
 
 
 class MainWindow(
+    FinalPolishMixin,
     GitHubReleaseUpdateMixin,
     UiRefinementMixin,
     AccountFeaturesMixin,
@@ -15,10 +17,10 @@ class MainWindow(
 ):
     """Janela canônica do NutriDesk.
 
-    O updater simples do GitHub e o refinamento visual vêm antes no MRO e
-    delegam comportamento para Conta -> Operacional -> Core. Assim, shell e
-    telas evoluem sem duplicar regras clínicas, persistência, licenciamento ou
-    serviços.
+    O polish final, updater simples do GitHub e refinamento visual vêm antes no
+    MRO e delegam comportamento para Conta -> Operacional -> Core. Assim,
+    microinterações e shell evoluem sem duplicar regras clínicas, persistência,
+    licenciamento ou serviços.
     """
 
     NAV = [
