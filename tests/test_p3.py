@@ -1,9 +1,7 @@
-import base64,json,os,zipfile
+import hashlib,json,os,zipfile
 from pathlib import Path
 import pytest
 from nutridesktop.version import SCHEMA_VERSION
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives import serialization
 from nutridesktop.data.database import Database
 from nutridesktop.data.repositories import PatientRepository,AssessmentRepository,AnamnesisRepository,PlanRepository
 from nutridesktop.services.auto_backup import AutoBackupService,BackupPolicy
@@ -43,13 +41,18 @@ def test_auto_backup_records_history_and_policy(tmp_path):
     db=Database(tmp_path/'x.db');db.initialize();PatientRepository(db).create('A','F');svc=AutoBackupService(db,tmp_path/'backups');svc.save_policy(BackupPolicy(True,'daily','startup',2,1,1));dest=svc.maybe_run('startup');assert dest and dest.exists()
     with db.connect() as c:r=c.execute("SELECT * FROM backup_history ORDER BY id DESC LIMIT 1").fetchone();assert r['trigger']=='auto:startup' and r['status']=='OK'
 
-def test_signed_update_manifest_and_relative_installer(tmp_path,monkeypatch):
+def test_github_release_update_and_checksum(tmp_path,monkeypatch):
     import nutridesktop.services.update_service as us
-    private=Ed25519PrivateKey.generate();pub=tmp_path/'update_public.pem';pub.write_bytes(private.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo));monkeypatch.setattr(us,'PUBLIC_KEY_LOCATIONS',[pub])
-    installer=tmp_path/'setup.exe';installer.write_bytes(b'installer-v999');digest=us.sha256_file(installer)
-    payload={'product':'NutriDesktop','version':'99.0.0','channel':'stable','installer_url':'setup.exe','sha256':digest,'notes':'Teste','mandatory':False}
-    raw=json.dumps(payload,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode();sig=base64.urlsafe_b64encode(private.sign(raw)).decode().rstrip('=');manifest=tmp_path/'version.json';manifest.write_text(json.dumps({'payload':payload,'signature':sig}))
-    db=Database(tmp_path/'u.db');db.initialize();svc=UpdateService(db);svc.set_manifest_url(str(manifest));info=svc.check();assert info and info.version=='99.0.0' and Path(info.installer_url)==installer.resolve();staged,_=svc.stage(info);assert staged.read_bytes()==installer.read_bytes()
+    version='99.0.0';installer_name=f'NutriDesktop-Setup-{version}.exe';payload=b'installer-v999';digest=hashlib.sha256(payload).hexdigest()
+    release={'tag_name':f'v{version}','draft':False,'prerelease':False,'body':'Teste','published_at':'2026-09-07T00:00:00Z','html_url':'https://github.com/example/release','assets':[{'name':installer_name,'browser_download_url':'https://example/setup.exe'},{'name':'SHA256SUMS.txt','browser_download_url':'https://example/SHA256SUMS.txt'}]}
+    monkeypatch.setattr(us,'_read_json',lambda url:release)
+    def fake_read(url):
+        if url.endswith('SHA256SUMS.txt'):return f'{digest}  {installer_name}\n'.encode()
+        if url.endswith('setup.exe'):return payload
+        raise AssertionError(url)
+    monkeypatch.setattr(us,'_read_url',fake_read);monkeypatch.setattr(us,'UPDATE_DIR',tmp_path/'updates')
+    db=Database(tmp_path/'u.db');db.initialize();svc=UpdateService(db);info=svc.check();assert info and info.version==version and info.sha256==digest
+    staged,_=svc.stage(info);assert staged.read_bytes()==payload
 
 def test_support_bundle_excludes_database_and_patient_files(tmp_path,monkeypatch):
     import nutridesktop.services.diagnostics as dg
