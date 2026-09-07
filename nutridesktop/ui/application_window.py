@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from .main_window import MainWindow as CoreMainWindow
+from .refinement import UiRefinementMixin
 from .window_features import AccountFeaturesMixin, OperationalFeaturesMixin
 
 
-class MainWindow(AccountFeaturesMixin, OperationalFeaturesMixin, CoreMainWindow):
+class MainWindow(UiRefinementMixin, AccountFeaturesMixin, OperationalFeaturesMixin, CoreMainWindow):
     """Janela canônica do NutriDesk.
 
-    A composição preserva a mesma ordem efetiva usada anteriormente por
-    V4MainWindow -> P3MainWindow -> MainWindow, mas remove nomes de versão do
-    caminho de execução. `main_window.py` continua sendo a base visual oficial;
-    recursos operacionais e de conta ficam em mixins neutros.
+    A camada de refinamento visual vem primeiro no MRO e delega comportamento
+    para Conta -> Operacional -> Core. Assim, shell e telas podem evoluir sem
+    duplicar regras clínicas, persistência, licenciamento ou serviços.
     """
 
     NAV = [
