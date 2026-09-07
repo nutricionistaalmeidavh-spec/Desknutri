@@ -29,3 +29,19 @@ jobs:
         run: python -m compileall -q app.py nutridesktop tests
       - name: Test
         run: python -m pytest -q
+      - name: PySide6 runtime smoke
+        shell: pwsh
+        run: |
+          $env:NUTRIDESKTOP_DATA_DIR = Join-Path $env:RUNNER_TEMP 'nutridesk-ui-smoke'
+          @'
+          from nutridesktop.data.database import db
+          db.initialize()
+          from PySide6.QtWidgets import QApplication
+          app = QApplication([])
+          from nutridesktop.ui.application_window import MainWindow
+          window = MainWindow()
+          for page in ('Dashboard', 'Pacientes', 'Agenda', 'Biblioteca', 'Configurações'):
+              window.show_page(page)
+          print('UI_SMOKE_OK')
+          window.close()
+          '@ | python -
