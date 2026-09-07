@@ -4,6 +4,8 @@ from nutridesktop.data.database import Database
 from nutridesktop.services.update_service import DEFAULT_RELEASE_API, UpdateService
 from nutridesktop.ui.application_window import MainWindow
 from nutridesktop.ui.auto_update_features import GitHubReleaseUpdateMixin
+from nutridesktop.ui.final_polish import FinalPolishMixin
+from nutridesktop.ui.refinement import UiRefinementMixin
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,10 +29,10 @@ def test_legacy_default_manifest_is_migrated_without_schema_change(tmp_path):
     assert svc.release_api_url() == DEFAULT_RELEASE_API
 
 
-def test_canonical_window_uses_github_release_update_mixin_first():
+def test_canonical_window_orders_polish_updater_then_refinement():
     mro = MainWindow.mro()
-    assert GitHubReleaseUpdateMixin in mro
-    assert mro.index(GitHubReleaseUpdateMixin) < mro.index(MainWindow.__bases__[1])
+    assert mro.index(FinalPolishMixin) < mro.index(GitHubReleaseUpdateMixin)
+    assert mro.index(GitHubReleaseUpdateMixin) < mro.index(UiRefinementMixin)
 
 
 def test_updater_is_user_confirmed_not_silent():

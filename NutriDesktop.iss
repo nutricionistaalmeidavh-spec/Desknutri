@@ -1,6 +1,6 @@
 #define MyAppName "NutriDesk"
 #ifndef MyAppVersion
-  #define MyAppVersion "6.1.0"
+  #error MyAppVersion must be provided by the canonical release build
 #endif
 #define MyAppPublisher "NutriDesk"
 #define MyAppExeName "NutriDesktop.exe"
