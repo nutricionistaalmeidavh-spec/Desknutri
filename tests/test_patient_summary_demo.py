@@ -77,7 +77,7 @@ def test_patient_evolution_card_uses_stacked_composition_as_primary_view(tmp_pat
     # A única linha é o peso corporal total sobre as barras.
     assert len(ax.lines) == 1
     assert len(ax.lines[0].get_ydata()) == 3
-    assert "Composição corporal" in ax.get_title()
+    assert "Composição corporal" in ax.get_title(loc="left")
     card.deleteLater()
 
 
