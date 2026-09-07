@@ -1,7 +1,8 @@
 """Tokens e gerenciamento de tema do NutriDesk UI Kit.
 
-O tema escuro profissional é o padrão do produto. A alternativa clara fica
-disponível nas Configurações sem misturar regras clínicas com aparência.
+A identidade canônica do produto é a interface clínica clara em vinho/rosé.
+O tema escuro continua disponível como alternativa, sem interferir nas regras
+clínicas ou na persistência de dados.
 """
 from __future__ import annotations
 
@@ -10,8 +11,11 @@ from dataclasses import dataclass
 from PySide6.QtCore import QObject, QSettings, Signal
 
 
-DEFAULT_THEME = "professional-data-clinic"
+DEFAULT_THEME = "premium-rose-healthcare"
+LEGACY_DEFAULT_THEME = "professional-data-clinic"
 THEME_SETTING_KEY = "ui/theme"
+THEME_VISUAL_GENERATION_KEY = "ui/theme_visual_generation"
+THEME_VISUAL_GENERATION = 2
 
 
 @dataclass(frozen=True)
@@ -43,28 +47,109 @@ class ThemeTokens:
     danger_soft: str
     info: str
     info_soft: str
+    composition_lean: str
+    composition_fat: str
+    composition_total: str
     radius_sm: int = 8
     radius_md: int = 14
 
 
 THEMES = {
+    "premium-rose-healthcare": ThemeTokens(
+        key="premium-rose-healthcare",
+        label="Clínico rosé",
+        bg="#FBF8F9",
+        surface="#FFFFFF",
+        surface_alt="#FCF2F6",
+        surface_elevated="#FFFFFF",
+        sidebar_bg="#FFFCFD",
+        topbar_bg="#FFFFFF",
+        text="#2D272A",
+        text_secondary="#62585D",
+        text_muted="#92878C",
+        border="#EEDDE5",
+        border_strong="#DDBFCD",
+        accent="#A84770",
+        accent_hover="#91385F",
+        accent_contrast="#FFFFFF",
+        active="#A84770",
+        active_text="#FFFFFF",
+        hover="#F7E9EF",
+        success="#3F9B68",
+        success_soft="#EAF6EE",
+        warning="#C58A24",
+        warning_soft="#FFF3D9",
+        danger="#B74D5C",
+        danger_soft="#FBE7EB",
+        info="#4E72AD",
+        info_soft="#EAF0F9",
+        composition_lean="#9A7895",
+        composition_fat="#F3C35B",
+        composition_total="#263746",
+    ),
     "professional-data-clinic": ThemeTokens(
-        key="professional-data-clinic", label="Profissional escuro",
-        bg="#101B1D", surface="#152427", surface_alt="#1A2D30", surface_elevated="#20383A",
-        sidebar_bg="#0B1719", topbar_bg="#152427", text="#F1F7F5", text_secondary="#B8CBC7",
-        text_muted="#8BA19C", border="#294346", border_strong="#3A5B5B", accent="#35BFAF",
-        accent_hover="#48D1C0", accent_contrast="#08201E", active="#1E5954", active_text="#F5FFFD",
-        hover="#213B3D", success="#65D39B", success_soft="#183C30", warning="#F3BB5C",
-        warning_soft="#4A3820", danger="#F28A86", danger_soft="#482527", info="#78B8FF", info_soft="#1E3854",
+        key="professional-data-clinic",
+        label="Profissional escuro",
+        bg="#101B1D",
+        surface="#152427",
+        surface_alt="#1A2D30",
+        surface_elevated="#20383A",
+        sidebar_bg="#0B1719",
+        topbar_bg="#152427",
+        text="#F1F7F5",
+        text_secondary="#B8CBC7",
+        text_muted="#8BA19C",
+        border="#294346",
+        border_strong="#3A5B5B",
+        accent="#35BFAF",
+        accent_hover="#48D1C0",
+        accent_contrast="#08201E",
+        active="#1E5954",
+        active_text="#F5FFFD",
+        hover="#213B3D",
+        success="#65D39B",
+        success_soft="#183C30",
+        warning="#F3BB5C",
+        warning_soft="#4A3820",
+        danger="#F28A86",
+        danger_soft="#482527",
+        info="#78B8FF",
+        info_soft="#1E3854",
+        composition_lean="#A98AA5",
+        composition_fat="#F3BB5C",
+        composition_total="#E7F3F0",
     ),
     "premium-soft-healthcare": ThemeTokens(
-        key="premium-soft-healthcare", label="Clínico claro",
-        bg="#F4F8F7", surface="#FFFFFF", surface_alt="#EDF5F3", surface_elevated="#FFFFFF",
-        sidebar_bg="#0F4C48", topbar_bg="#FFFFFF", text="#18302E", text_secondary="#55706C",
-        text_muted="#738883", border="#D6E5E1", border_strong="#B8D1CB", accent="#0F8074",
-        accent_hover="#0C6A61", accent_contrast="#FFFFFF", active="#D9F0EB", active_text="#0B514A",
-        hover="#E6F2EF", success="#18794E", success_soft="#DCF4E7", warning="#A96400",
-        warning_soft="#FFF0D4", danger="#B53B3B", danger_soft="#FDE3E1", info="#1E63B6", info_soft="#E1EFFF",
+        key="premium-soft-healthcare",
+        label="Clínico verde (legado)",
+        bg="#F4F8F7",
+        surface="#FFFFFF",
+        surface_alt="#EDF5F3",
+        surface_elevated="#FFFFFF",
+        sidebar_bg="#0F4C48",
+        topbar_bg="#FFFFFF",
+        text="#18302E",
+        text_secondary="#55706C",
+        text_muted="#738883",
+        border="#D6E5E1",
+        border_strong="#B8D1CB",
+        accent="#0F8074",
+        accent_hover="#0C6A61",
+        accent_contrast="#FFFFFF",
+        active="#D9F0EB",
+        active_text="#0B514A",
+        hover="#E6F2EF",
+        success="#18794E",
+        success_soft="#DCF4E7",
+        warning="#A96400",
+        warning_soft="#FFF0D4",
+        danger="#B53B3B",
+        danger_soft="#FDE3E1",
+        info="#1E63B6",
+        info_soft="#E1EFFF",
+        composition_lean="#8B7992",
+        composition_fat="#EAB95C",
+        composition_total="#18302E",
     ),
 }
 
@@ -81,13 +166,13 @@ QMainWindow, QDialog, QWidget#appRoot {{ background: {t.bg}; }}
 
 /* Shell */
 QWidget#sidebar {{ background: {t.sidebar_bg}; border-right: 1px solid {t.border}; }}
-QLabel#brand {{ color: {t.text}; font-size: 23px; font-weight: 800; padding: 5px 4px 13px; }}
+QLabel#brand {{ color: {t.accent}; font-size: 23px; font-weight: 800; padding: 5px 4px 13px; }}
 QLabel#navSection {{ color: {t.text_muted}; font-size: 10px; font-weight: 700; padding: 13px 7px 4px; letter-spacing: 1px; }}
 QFrame#topbar {{ background: {t.topbar_bg}; border-bottom: 1px solid {t.border}; }}
 QLabel#topbarContext {{ color: {t.text_secondary}; font-size: 12px; font-weight: 650; }}
 QLabel#topbarResult {{ color: {t.text_muted}; font-size: 11px; }}
 QFrame#sidebarProfile {{ background: transparent; border-top: 1px solid {t.border}; }}
-QLineEdit#globalSearch {{ background: {t.surface_alt}; min-height: 20px; }}
+QLineEdit#globalSearch {{ background: {t.surface}; min-height: 20px; }}
 
 /* Buttons */
 QPushButton {{ background: transparent; border: 1px solid transparent; border-radius: {t.radius_sm}px; padding: 8px 12px; color: {t.text}; }}
@@ -130,10 +215,13 @@ QTableWidget::item:selected, QTableView::item:selected {{ background: {t.active}
 /* Cards e tipografia */
 QFrame#card {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
 QFrame#softCard {{ background: {t.surface_alt}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
+QFrame#comparisonCard {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: 10px; }}
 QLabel#pageTitle {{ font-size: 25px; font-weight: 800; color: {t.text}; }}
 QLabel#pageSubtitle, QLabel#muted {{ color: {t.text_muted}; }}
 QLabel#metricLabel {{ color: {t.text_secondary}; font-weight: 600; }}
 QLabel#metricValue {{ color: {t.text}; font-size: 24px; font-weight: 800; }}
+QLabel#comparisonValue {{ color: {t.text}; font-size: 15px; font-weight: 800; }}
+QLabel#comparisonDelta {{ color: {t.success}; font-size: 12px; font-weight: 700; }}
 QLabel#sectionTitle {{ color: {t.text}; font-size: 15px; font-weight: 750; }}
 
 /* Prontuário */
@@ -183,7 +271,22 @@ class ThemeManager(QObject):
         super().__init__()
         self.app = app
         self.settings = settings or QSettings("NutriDesk", "NutriDesk")
-        self._key = str(self.settings.value(THEME_SETTING_KEY, DEFAULT_THEME))
+        stored = self.settings.value(THEME_SETTING_KEY, None)
+        try:
+            generation = int(self.settings.value(THEME_VISUAL_GENERATION_KEY, 0) or 0)
+        except (TypeError, ValueError):
+            generation = 0
+
+        # A 6.1–6.3 gravava o tema escuro como padrão. Na primeira execução da
+        # geração visual 2, esse antigo padrão é migrado para a identidade rosé.
+        # Temas alternativos explicitamente diferentes continuam preservados.
+        if generation < THEME_VISUAL_GENERATION and (stored is None or str(stored) == LEGACY_DEFAULT_THEME):
+            self._key = DEFAULT_THEME
+            self.settings.setValue(THEME_SETTING_KEY, DEFAULT_THEME)
+        else:
+            self._key = str(stored or DEFAULT_THEME)
+        if generation < THEME_VISUAL_GENERATION:
+            self.settings.setValue(THEME_VISUAL_GENERATION_KEY, THEME_VISUAL_GENERATION)
 
     @property
     def key(self) -> str:
@@ -194,6 +297,7 @@ class ThemeManager(QObject):
         self._key = chosen
         if persist:
             self.settings.setValue(THEME_SETTING_KEY, chosen)
+            self.settings.setValue(THEME_VISUAL_GENERATION_KEY, THEME_VISUAL_GENERATION)
         self.app.setStyleSheet(build_stylesheet(get_theme(chosen)))
         self.theme_changed.emit(chosen)
         return chosen
