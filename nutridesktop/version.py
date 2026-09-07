@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass,asdict
 
-APP_VERSION = "6.3.1"
+APP_VERSION = "6.4.0"
 SCHEMA_VERSION = 13
 CLINICAL_CONTENT_VERSION = "2026.08"
 WHO_ENGINE_VERSION = "pygrowthstandards-0.1.3"

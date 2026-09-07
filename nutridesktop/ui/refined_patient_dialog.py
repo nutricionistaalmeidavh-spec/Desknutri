@@ -3,65 +3,125 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from PySide6.QtWidgets import QApplication, QComboBox, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .common import button
 from .design_system import Card, StatCard, muted, section_title
 from .patient_dialog import PatientDialog as CorePatientDialog
 from .view_models import age_label, age_on
-from nutridesktop.services.charts import patient_metric_figure
+from nutridesktop.services.charts import (
+    patient_bodyfat_figure,
+    patient_circumference_figure,
+    patient_composition_figure,
+    patient_weight_bmi_figure,
+)
 from nutridesktop.ui_kit.components import PatientHeader, TimelineItem
 from nutridesktop.ui_kit.theme import get_theme
 
 
-EVOLUTION_METRICS = (
-    ("Peso", "peso"),
-    ("IMC", "imc"),
-    ("Gordura corporal", "pg_final"),
-    ("Massa magra", "massa_magra"),
-    ("Cintura", "cintura"),
+COMPARISON_TABS = (
+    ("Composição corporal", "composition"),
+    ("Peso e IMC", "weight_bmi"),
+    ("Circunferências", "circumference"),
+    ("% Gordura", "body_fat"),
 )
 
 
+class ComparisonStatCard(QFrame):
+    """Card compacto de primeira → última avaliação, como no layout aprovado."""
+
+    def __init__(
+        self,
+        label: str,
+        first,
+        last,
+        unit: str = "",
+        delta_unit: str | None = None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.setObjectName("comparisonCard")
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 10, 12, 10)
+        lay.setSpacing(3)
+
+        title = QLabel(label)
+        title.setObjectName("metricLabel")
+        value = QLabel(self._pair(first, last, unit))
+        value.setObjectName("comparisonValue")
+        delta = QLabel(self._delta(first, last, unit if delta_unit is None else delta_unit))
+        delta.setObjectName("comparisonDelta")
+        lay.addWidget(title)
+        lay.addWidget(value)
+        lay.addWidget(delta)
+
+    @staticmethod
+    def _pair(first, last, unit):
+        if first is None or last is None:
+            return "—"
+        suffix = f" {unit}" if unit else ""
+        return f"{first:.1f}{suffix}  →  {last:.1f}{suffix}"
+
+    @staticmethod
+    def _delta(first, last, unit):
+        if first is None or last is None:
+            return "Sem comparação"
+        delta = last - first
+        suffix = f" {unit}" if unit else ""
+        sign = "+" if delta > 0 else ""
+        arrow = "↑" if delta > 0 else "↓" if delta < 0 else "→"
+        return f"{arrow} {sign}{delta:.1f}{suffix}"
+
+
 class PatientEvolutionCard(Card):
-    """Gráfico longitudinal compacto reutilizando o motor já usado em Evolução."""
+    """Comparação longitudinal visual com composição corporal em destaque.
+
+    A visão principal restaura o layout aprovado: massa livre de gordura + massa
+    gorda em barras empilhadas, com peso corporal total sobreposto. Os demais
+    indicadores ficam em abas e o motor longitudinal legado continua disponível
+    separadamente no prontuário.
+    """
 
     def __init__(self, assessments, parent=None):
         super().__init__(parent)
         self.assessments = list(assessments)
-        self.canvas = None
+        self.canvases = {}
 
         header = QHBoxLayout()
         title_box = QVBoxLayout()
         title_box.setSpacing(2)
-        title_box.addWidget(section_title("Evolução do paciente"))
-        title_box.addWidget(muted("Compare as avaliações registradas ao longo do acompanhamento."))
+        title_box.addWidget(section_title("Evolução"))
+        title_box.addWidget(muted("Compare as avaliações registradas do paciente."))
         header.addLayout(title_box, 1)
-
-        self.metric = QComboBox()
-        self.metric.setMinimumWidth(170)
-        for label, key in EVOLUTION_METRICS:
-            if any(self._value(row, key) is not None for row in self.assessments):
-                self.metric.addItem(label, key)
-        header.addWidget(self.metric)
+        header.addWidget(muted(self._range_label()))
         self.body.addLayout(header)
 
-        self.chart_host = QWidget(self)
-        self.chart_layout = QVBoxLayout(self.chart_host)
-        self.chart_layout.setContentsMargins(0, 4, 0, 0)
-        self.body.addWidget(self.chart_host)
+        self._build_comparison_cards()
 
-        if self.metric.count() == 0:
-            self.metric.setEnabled(False)
-            self.chart_layout.addWidget(muted("Registre pelo menos uma avaliação para visualizar a evolução."))
-            return
+        self.chart_tabs = QTabWidget(self)
+        self.tab_layouts = {}
+        for label, key in COMPARISON_TABS:
+            page = QWidget()
+            lay = QVBoxLayout(page)
+            lay.setContentsMargins(0, 6, 0, 0)
+            self.tab_layouts[key] = lay
+            self.chart_tabs.addTab(page, label)
+        self.body.addWidget(self.chart_tabs)
 
-        self.metric.currentIndexChanged.connect(self._render)
         app = QApplication.instance()
         manager = app.property("theme_manager") if app else None
         if manager is not None and hasattr(manager, "theme_changed"):
-            manager.theme_changed.connect(lambda _key: self._render())
-        self._render()
+            manager.theme_changed.connect(lambda _key: self._render_all())
+        self._render_all()
 
     @staticmethod
     def _value(row, key):
@@ -70,24 +130,85 @@ class PatientEvolutionCard(Card):
         except (KeyError, IndexError, TypeError):
             return None
 
-    def _clear_chart(self):
-        while self.chart_layout.count():
-            item = self.chart_layout.takeAt(0)
+    def _range_label(self):
+        if not self.assessments:
+            return "Sem avaliações"
+        first = str(self._value(self.assessments[0], "data") or "")
+        last = str(self._value(self.assessments[-1], "data") or "")
+
+        def fmt(raw):
+            try:
+                return datetime.fromisoformat(raw).strftime("%d/%m/%Y")
+            except (TypeError, ValueError):
+                return raw
+
+        if len(self.assessments) == 1:
+            return f"1 avaliação • {fmt(first)}"
+        return f"{len(self.assessments)} avaliações • {fmt(first)} → {fmt(last)}"
+
+    def _build_comparison_cards(self):
+        if not self.assessments:
+            self.body.addWidget(muted("Registre pelo menos uma avaliação para visualizar a evolução."))
+            return
+        first = self.assessments[0]
+        last = self.assessments[-1]
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+
+        specs = (
+            ("Peso", "peso", "kg", None),
+            ("Massa gorda", "massa_gorda", "kg", None),
+            ("Massa livre de gordura", "massa_magra", "kg", None),
+            ("% Gordura", "pg_final", "%", "p.p."),
+            ("Cintura", "cintura", "cm", None),
+        )
+        for col, (label, key, unit, delta_unit) in enumerate(specs):
+            grid.addWidget(
+                ComparisonStatCard(
+                    label,
+                    self._value(first, key),
+                    self._value(last, key),
+                    unit,
+                    delta_unit,
+                    self,
+                ),
+                0,
+                col,
+            )
+        self.body.addLayout(grid)
+
+    @staticmethod
+    def _clear_layout(layout):
+        while layout.count():
+            item = layout.takeAt(0)
             widget = item.widget()
             if widget:
                 widget.deleteLater()
 
-    def _render(self):
-        metric = self.metric.currentData()
-        if not metric:
-            return
-        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+    def _figure(self, key, tokens):
+        if key == "composition":
+            return patient_composition_figure(
+                self.assessments,
+                lean_color=tokens.composition_lean,
+                fat_color=tokens.composition_fat,
+                total_color=tokens.composition_total,
+            )
+        if key == "weight_bmi":
+            return patient_weight_bmi_figure(
+                self.assessments,
+                weight_color=tokens.accent,
+                bmi_color=tokens.border_strong,
+            )
+        if key == "circumference":
+            return patient_circumference_figure(
+                self.assessments,
+                waist_color=tokens.accent,
+                hip_color=tokens.border_strong,
+            )
+        return patient_bodyfat_figure(self.assessments, color=tokens.accent)
 
-        self._clear_chart()
-        fig = patient_metric_figure(self.assessments, metric)
-        app = QApplication.instance()
-        manager = app.property("theme_manager") if app else None
-        tokens = get_theme(getattr(manager, "key", None))
+    def _style_figure(self, fig, tokens):
         fig.patch.set_facecolor(tokens.surface)
         for ax in fig.axes:
             ax.set_facecolor(tokens.surface)
@@ -95,26 +216,42 @@ class PatientEvolutionCard(Card):
             ax.title.set_color(tokens.text)
             ax.yaxis.label.set_color(tokens.text_secondary)
             ax.xaxis.label.set_color(tokens.text_secondary)
-            ax.grid(color=tokens.border, alpha=.45)
+            ax.grid(color=tokens.border, alpha=.55)
             for spine in ax.spines.values():
                 spine.set_color(tokens.border)
-            for line in ax.lines:
-                line.set_color(tokens.accent)
-                line.set_markerfacecolor(tokens.accent)
-                line.set_markeredgecolor(tokens.accent)
+            legend = ax.get_legend()
+            if legend:
+                for text in legend.get_texts():
+                    text.set_color(tokens.text_secondary)
+        return fig
 
-        canvas = FigureCanvasQTAgg(fig)
-        canvas.setMinimumHeight(250)
-        self.canvas = canvas
-        self.chart_layout.addWidget(canvas)
-        canvas.draw_idle()
+    def _render_all(self):
+        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+
+        app = QApplication.instance()
+        manager = app.property("theme_manager") if app else None
+        tokens = get_theme(getattr(manager, "key", None))
+        for _label, key in COMPARISON_TABS:
+            layout = self.tab_layouts[key]
+            self._clear_layout(layout)
+            fig = self._style_figure(self._figure(key, tokens), tokens)
+            canvas = FigureCanvasQTAgg(fig)
+            canvas.setMinimumHeight(285)
+            layout.addWidget(canvas)
+            self.canvases[key] = canvas
+            canvas.draw_idle()
+
+    @property
+    def canvas(self):
+        """Compatibilidade com testes/código que esperavam um único canvas."""
+        return self.canvases.get("composition")
 
 
 class RefinedPatientDialog(CorePatientDialog):
-    """Aplica PatientHeader e timeline canônica ao prontuário existente.
+    """Aplica PatientHeader e composição premium ao prontuário existente.
 
-    Todos os tabs, repositories, cálculos e callbacks continuam pertencendo ao
-    PatientDialog original. Esta classe altera apenas composição e apresentação.
+    Repositories, cálculos e callbacks continuam pertencendo ao PatientDialog
+    original. Esta classe altera apenas composição e apresentação.
     """
 
     def __init__(self, pid, parent=None):
@@ -146,7 +283,6 @@ class RefinedPatientDialog(CorePatientDialog):
         if hasattr(self, "patient_header"):
             self.patient_header.set_patient(name, meta, self._next_appointment_text())
             return
-        # Durante o __init__ da classe-base o cabeçalho canônico ainda não existe.
         if hasattr(self, "title"):
             self.title.setText(name)
         if hasattr(self, "header_meta"):
@@ -260,4 +396,25 @@ class RefinedPatientDialog(CorePatientDialog):
         cols.addWidget(right, 1)
         lay.addLayout(cols)
         lay.addStretch()
+        return w
+
+    def evolution_workspace_tab(self):
+        """Evolução canônica em barras; o gráfico legado continua acessível."""
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 8, 0, 0)
+        lay.setSpacing(12)
+        assessments = self.ar.list(self.pid)
+        self.evolution_comparison_card = PatientEvolutionCard(assessments, self)
+        lay.addWidget(self.evolution_comparison_card)
+
+        actions = QHBoxLayout()
+        actions.addStretch()
+        actions.addWidget(button("Abrir gráfico longitudinal", self.show_chart, variant="ghost"))
+        lay.addLayout(actions)
+
+        history = Card()
+        history.body.addWidget(section_title("Histórico clínico"))
+        history.body.addWidget(self.timeline_tab())
+        lay.addWidget(history)
         return w

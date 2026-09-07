@@ -1,3 +1,15 @@
+# NutriDesktop 6.4.0 — Identidade rosé e comparação corporal restauradas
+
+- Restaura como padrão a identidade clínica clara em vinho/rosé usada no design aprovado: fundo off-white, superfícies brancas, navegação clara e ações em rosé.
+- Tema escuro permanece disponível como alternativa e nenhuma regra clínica depende do tema visual.
+- Instalações que herdaram o antigo tema escuro padrão da série 6.1–6.3 migram uma única vez para a identidade rosé; escolhas alternativas explícitas são preservadas.
+- Evolução passa a priorizar o gráfico aprovado de composição corporal em barras empilhadas: massa livre de gordura + massa gorda, com peso corporal total sobreposto.
+- Comparação clínica organizada em Composição corporal, Peso e IMC, Circunferências e % Gordura.
+- Cards comparam primeira e última avaliação para Peso, Massa gorda, Massa livre de gordura, % Gordura e Cintura.
+- O gráfico longitudinal de linha anterior permanece disponível como visualização secundária, sem perda de funcionalidade.
+- Resumo do prontuário e aba Evolução usam a nova comparação; paciente demonstrativo e dados clínicos existentes são preservados.
+- Schema SQLite permanece 13; updater, licenciamento, cálculos clínicos e motor WHO não foram alterados.
+
 # NutriDesktop 6.3.1 — Evolução no resumo e paciente demonstrativo
 
 - Gráfico de evolução do paciente passa a aparecer diretamente no Resumo do prontuário.

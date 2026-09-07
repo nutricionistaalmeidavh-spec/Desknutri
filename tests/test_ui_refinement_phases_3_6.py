@@ -5,7 +5,7 @@ from nutridesktop.ui.main_window import MainWindow as CoreMainWindow
 from nutridesktop.ui.refinement import UiRefinementMixin
 from nutridesktop.ui.window_features import AccountFeaturesMixin, OperationalFeaturesMixin
 from nutridesktop.ui_kit.components import StatusBadge, TableToolbar, UiButton, status_tone
-from nutridesktop.ui_kit.theme import DEFAULT_THEME, build_stylesheet, get_theme
+from nutridesktop.ui_kit.theme import DEFAULT_THEME, THEMES, build_stylesheet, get_theme
 
 
 def test_canonical_window_keeps_behavior_layers_after_ui_refinement():
@@ -15,14 +15,16 @@ def test_canonical_window_keeps_behavior_layers_after_ui_refinement():
     assert mro.index(OperationalFeaturesMixin) < mro.index(CoreMainWindow)
 
 
-def test_green_palette_is_preserved_for_default_theme():
+def test_rose_palette_is_the_canonical_default_and_dark_remains_available():
     theme = get_theme(DEFAULT_THEME)
-    assert theme.bg == "#101B1D"
-    assert theme.surface == "#152427"
-    assert theme.sidebar_bg == "#0B1719"
-    assert theme.accent == "#35BFAF"
-    assert theme.accent_hover == "#48D1C0"
-    assert theme.active == "#1E5954"
+    assert theme.bg == "#FBF8F9"
+    assert theme.surface == "#FFFFFF"
+    assert theme.sidebar_bg == "#FFFCFD"
+    assert theme.accent == "#A84770"
+    assert theme.accent_hover == "#91385F"
+    assert theme.active == "#A84770"
+    assert "professional-data-clinic" in THEMES
+    assert THEMES["professional-data-clinic"].bg == "#101B1D"
 
 
 def test_semantic_status_mapping_does_not_change_business_values():
