@@ -14,6 +14,7 @@ jobs:
       DISPLAY: :99
       QT_X11_NO_MITSHM: "1"
       QT_QPA_PLATFORM: xcb
+      PYTHONPATH: ${{ github.workspace }}
       NUTRIDESKTOP_DATA_DIR: ${{ github.workspace }}/.video-demo-data
 
     steps:
