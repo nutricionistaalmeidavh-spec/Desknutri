@@ -3,7 +3,7 @@ import sys
 from PySide6.QtWidgets import QApplication,QMessageBox,QInputDialog
 from nutridesktop.data.database import db
 from nutridesktop.data.repositories import TemplateRepository,ProtocolRepository
-from nutridesktop.data.seed import seed_taco,seed_legacy_content
+from nutridesktop.data.seed import seed_taco,seed_legacy_content,seed_demo_patient
 from nutridesktop.services.templates import seed as seed_templates
 from nutridesktop.clinical.protocols import seed as seed_protocols
 from nutridesktop.core.logging_setup import configure_logging
@@ -59,7 +59,7 @@ def main():
             with db.connect() as c:ok=c.execute('PRAGMA integrity_check').fetchone()[0]
             return 0 if ok=='ok' else 2
         except Exception:return 3
-    log=configure_logging();db.initialize();seed_taco();seed_legacy_content();DocumentService().migrate_legacy_documents();seed_templates(TemplateRepository());seed_protocols(ProtocolRepository())
+    log=configure_logging();db.initialize();seed_taco();seed_legacy_content();seed_demo_patient();DocumentService().migrate_legacy_documents();seed_templates(TemplateRepository());seed_protocols(ProtocolRepository())
     app=QApplication(sys.argv)
     theme_manager=ThemeManager(app);app.setProperty('theme_manager',theme_manager);theme_manager.apply()
     install_exception_hook(lambda t,m:QMessageBox.critical(None,t,m))
