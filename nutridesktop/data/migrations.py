@@ -126,6 +126,8 @@ ALTER TABLE document_templates ADD COLUMN is_default INTEGER DEFAULT 0;
 ALTER TABLE document_templates ADD COLUMN preview_json TEXT DEFAULT '{}';
 '''),
 Migration(14,"canonical_clinical_flow",r'''
+ALTER TABLE lab_results ADD COLUMN import_fingerprint TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_import_fingerprint ON lab_results(import_fingerprint) WHERE import_fingerprint IS NOT NULL;
 ALTER TABLE consultas ADD COLUMN plano_id_enviado INTEGER REFERENCES planos(id) ON DELETE SET NULL;
 ALTER TABLE consultas ADD COLUMN plano_versao_enviada INTEGER;
 ALTER TABLE consultas ADD COLUMN finalization_key TEXT;
