@@ -413,6 +413,8 @@ class UiRefinementMixin:
             # Uma busca/atualização nunca deve herdar a seleção de outro paciente.
             self.patient_table.clearSelection()
         super().refresh_patients()
+        if not hasattr(self, "patient_table"):
+            return
         count = self.patient_table.rowCount()
         query = self.patient_search.text().strip() if hasattr(self, "patient_search") else ""
         if hasattr(self, "patient_count"):
