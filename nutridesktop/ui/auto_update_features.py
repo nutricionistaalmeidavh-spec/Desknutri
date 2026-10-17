@@ -162,7 +162,7 @@ class GitHubReleaseUpdateMixin:
             answer = QMessageBox.question(
                 self, "Instalar atualização",
                 f"Atualizar para NutriDesk {info.version}?\n\n"
-                ("Um backup do banco clínico será criado antes de abrir o DMG. "
+                + ("Um backup do banco clínico será criado antes de abrir o DMG. "
                  "Depois, feche o NutriDesk, arraste o aplicativo para Aplicativos "
                  "e confirme a substituição." if is_mac else
                  "O sistema fará backup do banco clínico antes de fechar, "
