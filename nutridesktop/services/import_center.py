@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass,field
 from pathlib import Path
-import json,re,unicodedata
+import hashlib,json,re,unicodedata
 from datetime import date
 import pandas as pd
 from nutridesktop.data.repositories import ImportHistoryRepository
@@ -177,6 +177,18 @@ def apply_import(preview,database):
         elif preview.kind=='labs':
             panel_cache={}
             for r in preview.rows:
+                numeric=_num(r['valor']);value_text='' if numeric is not None else r['valor']
+                # Stable across file names and repeated imports; enforces exactly-once semantics.
+                identity=[
+                    r['paciente_id'],r['data_coleta'],
+                    r['painel'].strip().casefold(),r['laboratorio'].strip().casefold(),
+                    r['marcador'].strip().casefold(),numeric,value_text.strip(),
+                    r['unidade'].strip().casefold(),r['ref_min'],r['ref_max'],
+                ]
+                fingerprint=hashlib.sha256(json.dumps(identity,ensure_ascii=False,separators=(',',':')).encode('utf-8')).hexdigest()
+                if c.execute("SELECT 1 FROM lab_results WHERE import_fingerprint=?",(fingerprint,)).fetchone():
+                    newly_skipped+=1
+                    continue
                 key=(r['paciente_id'],r['data_coleta'],r['painel'],r['laboratorio'])
                 panel_id=panel_cache.get(key)
                 if panel_id is None:
@@ -187,7 +199,6 @@ def apply_import(preview,database):
                         panel_id=c.execute("INSERT INTO lab_panels(paciente_id,nome,data_coleta,laboratorio) VALUES(?,?,?,?)",key).lastrowid
                         c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(r['paciente_id'],'laboratorio',r['data_coleta'],f"Exames - {r['painel']}",panel_id))
                     panel_cache[key]=panel_id
-                numeric=_num(r['valor']);value_text='' if numeric is not None else r['valor']
                 previous=c.execute("""SELECT id FROM lab_results
                     WHERE panel_id=? AND marker_name=? COLLATE NOCASE
                     AND value_numeric IS ? AND value_text IS ? AND unit IS ?
@@ -201,7 +212,7 @@ def apply_import(preview,database):
                     if r['ref_min'] is not None and numeric<r['ref_min']:flag='baixo'
                     elif r['ref_max'] is not None and numeric>r['ref_max']:flag='alto'
                     else:flag='normal'
-                c.execute("INSERT INTO lab_results(panel_id,marker_name,value_numeric,value_text,unit,ref_min,ref_max,flag) VALUES(?,?,?,?,?,?,?,?)",(panel_id,r['marcador'],numeric,value_text,r['unidade'],r['ref_min'],r['ref_max'],flag))
+                c.execute("INSERT INTO lab_results(panel_id,marker_name,value_numeric,value_text,unit,ref_min,ref_max,flag,import_fingerprint) VALUES(?,?,?,?,?,?,?,?,?)",(panel_id,r['marcador'],numeric,value_text,r['unidade'],r['ref_min'],r['ref_max'],flag,fingerprint))
                 imported+=1
         else:raise ValueError('Tipo de importação não suportado')
     skipped=len(preview.skipped)+newly_skipped
