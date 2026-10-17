@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import sqlite3
 import subprocess
 import sys
@@ -132,6 +133,19 @@ def _checksum_for(text: str, filename: str) -> str | None:
     return None
 
 
+def installer_filename(version: str, system: str | None = None, architecture: str | None = None) -> str:
+    """Stable artifact name shared by the updater and GitHub release packaging."""
+    system = system or platform.system()
+    if system == "Windows":
+        return f"NutriDesktop-Setup-{version}.exe"
+    if system == "Darwin":
+        architecture = (architecture or platform.machine()).lower()
+        if architecture not in ("arm64", "x86_64"):
+            raise RuntimeError(f"Arquitetura macOS não suportada: {architecture}")
+        return f"NutriDesk-{version}-macos-{architecture}.dmg"
+    raise RuntimeError(f"Sistema operacional não suportado para atualização: {system}")
+
+
 class UpdateService:
     # Mantemos a chave histórica de configuração para não criar migração de schema.
     SOURCE_KEY = "p3.update_manifest_url"
@@ -184,7 +198,10 @@ class UpdateService:
         if not version or not is_newer(version):
             return None
 
-        installer_name = f"NutriDesktop-Setup-{version}.exe"
+        try:
+            installer_name = installer_filename(version)
+        except RuntimeError:
+            return None
         installer = _asset(release, installer_name)
         checksums = _asset(release, CHECKSUM_ASSET)
         if not installer:
@@ -257,7 +274,7 @@ class UpdateService:
     def stage(self, info: UpdateInfo, progress=None):
         installer = self._download(
             info.installer_url,
-            UPDATE_DIR / f"NutriDesktop-Setup-{info.version}.exe",
+            UPDATE_DIR / installer_filename(info.version),
             info.sha256,
             progress=progress,
         )
@@ -265,19 +282,24 @@ class UpdateService:
         return installer, backup
 
     def launch_staged(self, info: UpdateInfo, installer: Path, rollback_installer=None):
-        if os.name != "nt":
-            raise RuntimeError("A instalação integrada está disponível no Windows.")
+        system = platform.system()
+        if system != "Darwin" and os.name != "nt":
+            raise RuntimeError("A atualização integrada não é suportada neste sistema.")
         installer = Path(installer)
         if not installer.is_file() or sha256_file(installer).lower() != info.sha256.lower():
             raise RuntimeError("Instalador ausente ou alterado após a validação SHA-256.")
+        if installer.name != installer_filename(info.version):
+            raise RuntimeError("O arquivo de instalação não corresponde à plataforma.")
         backup = Path(rollback_installer) if rollback_installer else None
         if not backup or not backup.is_file():
             raise RuntimeError("Backup clínico pré-atualização não encontrado. Operação cancelada.")
         if not getattr(sys, "frozen", False):
-            raise RuntimeError("Instalação integrada disponível apenas no executável empacotado.")
+            raise RuntimeError("Atualização integrada disponível apenas no aplicativo empacotado.")
 
-        script = UPDATE_DIR / "install-update.ps1"
-        script.write_text(_INSTALL_HELPER_SCRIPT, encoding="utf-8-sig")
+        script = None
+        if system != "Darwin":
+            script = UPDATE_DIR / "install-update.ps1"
+            script.write_text(_INSTALL_HELPER_SCRIPT, encoding="utf-8-sig")
         PENDING_FILE.write_text(json.dumps({
             "from_version": APP_VERSION,
             "to_version": info.version,
@@ -286,18 +308,24 @@ class UpdateService:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }, ensure_ascii=False), encoding="utf-8")
         try:
-            subprocess.Popen(
-                ["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-                 "-ExecutionPolicy", "Bypass", "-File", str(script),
-                 "-ParentPid", str(os.getpid()), "-Installer", str(installer),
-                 "-Executable", sys.executable, "-LogPath", str(UPDATE_DIR / "install-update.log")],
-                close_fds=True,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
-            )
+            if system == "Darwin":
+                # Opening a DMG is non-destructive; Finder handles the opt-in copy.
+                subprocess.Popen(["open", str(installer)], close_fds=True)
+            else:
+                subprocess.Popen(
+                    ["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+                     "-ExecutionPolicy", "Bypass", "-File", str(script),
+                     "-ParentPid", str(os.getpid()), "-Installer", str(installer),
+                     "-Executable", sys.executable, "-LogPath", str(UPDATE_DIR / "install-update.log")],
+                    close_fds=True,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
+                )
         except Exception:
             PENDING_FILE.unlink(missing_ok=True)
             raise
-        self._record_history(APP_VERSION, info.version, "installer_started", info.release_url)
+        self._record_history(APP_VERSION, info.version,
+                             "installer_opened" if system == "Darwin" else "installer_started",
+                             info.release_url)
         return True
 
     def complete_pending_update(self):

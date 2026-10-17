@@ -8,6 +8,11 @@ def app_data_dir() -> Path:
     override = os.environ.get("NUTRIDESKTOP_DATA_DIR")
     if override:
         base = Path(override)
+    elif sys.platform == "darwin":
+        # Keep clinical records from any older Unix-style macOS installation.
+        legacy = Path.home() / ".local" / "share" / APP_NAME
+        native = Path.home() / "Library" / "Application Support" / APP_NAME
+        base = legacy if (legacy / "nutridesktop.db").is_file() else native
     elif os.name == "nt":
         base = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / APP_NAME
     else:

@@ -7,21 +7,42 @@ on:
         description: "Publicar GitHub Release após gerar os artefatos"
         type: boolean
         default: false
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/release.yml"
+      - "nutridesktop-macos.spec"
+      - "tools/build_macos.py"
+      - "nutridesktop/core/paths.py"
+      - "nutridesktop/services/update_service.py"
+      - "nutridesktop/ui/auto_update_features.py"
+      - "tests/test_macos_distribution.py"
   push:
     branches: [main]
     paths:
       - "nutridesktop/version.py"
+      - ".github/workflows/release.yml"
+      - "nutridesktop-macos.spec"
+      - "tools/build_macos.py"
+      - "nutridesktop/core/paths.py"
+      - "nutridesktop/services/update_service.py"
+      - "nutridesktop/ui/auto_update_features.py"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: nutridesk-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
+        with:
+          python-version: '3.12'
       - name: Install dependencies
         shell: pwsh
         run: |
@@ -29,22 +50,114 @@ jobs:
           python -m pip install -r license_server/requirements.txt
           python -m pip install httpx2
       - run: choco install innosetup -y
-      - name: Build, test and package release
+      - name: Build, test and package Windows release
         shell: pwsh
         run: python tools/build_release.py
       - uses: actions/upload-artifact@v4
         with:
-          name: NutriDesktop-stable
-          path: release/*
-      - name: Publish GitHub Release
-        if: ${{ github.event_name == 'push' || inputs.publish }}
-        shell: pwsh
+          name: NutriDesktop-windows
+          path: release/NutriDesktop-Setup-*.exe
+          if-no-files-found: error
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -r license_server/requirements.txt
+          python -m pip install httpx2
+      - name: Compile and run regression tests
+        run: |
+          python -m compileall -q app.py nutridesktop tests
+          python -m pytest -q
+      - name: Build app, smoke test and verify DMG
+        run: python tools/build_macos.py --arch "${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NutriDesktop-macos-${{ matrix.arch }}
+          path: release/NutriDesk-*-macos-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
+  publish:
+    if: ${{ github.event_name == 'push' || inputs.publish == true }}
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: NutriDesktop-*
+          merge-multiple: true
+          path: release
+      - name: Publish both architectures and preserve existing Windows installer
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $v = python -c "from nutridesktop.version import APP_VERSION; print(APP_VERSION)"
-          if (gh release view "v$v" 2>$null) {
-            gh release upload "v$v" release/* --clobber
-          } else {
-            gh release create "v$v" release/* --target "${{ github.sha }}" --title "NutriDesktop $v" --notes-file CHANGELOG.md
-          }
+          set -euo pipefail
+          version="$(python -c 'from nutridesktop.version import APP_VERSION; print(APP_VERSION)')"
+          tag="v$version"
+          mkdir -p previous
+          touch existing-assets.txt
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release view "$tag" --json assets --jq '.assets[].name' > existing-assets.txt
+            gh release download "$tag" -p SHA256SUMS.txt -D previous --clobber || true
+          else
+            gh release create "$tag" --target "${{ github.sha }}" --title "NutriDesktop $version" --notes-file CHANGELOG.md
+          fi
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import re
+
+          previous = {}
+          old = Path("previous/SHA256SUMS.txt")
+          if old.exists():
+              for line in old.read_text(encoding="utf-8").splitlines():
+                  match = re.fullmatch(r"([a-fA-F0-9]{64})\s+\*?(.+)", line.strip())
+                  if match:
+                      previous[match.group(2)] = match.group(1).lower()
+          existing = set(Path("existing-assets.txt").read_text().splitlines())
+          lines = []
+          for asset in sorted(Path("release").iterdir()):
+              if asset.suffix not in (".exe", ".dmg"):
+                  continue
+              if asset.suffix == ".exe" and asset.name in existing:
+                  if asset.name not in previous:
+                      raise SystemExit("Checksum original do EXE existente não disponível")
+                  digest = previous[asset.name]
+              else:
+                  with asset.open("rb") as stream:
+                      digest = hashlib.file_digest(stream, "sha256").hexdigest()
+              lines.append(f"{digest}  {asset.name}\n")
+          if len(lines) != 3:
+              raise SystemExit("Release requer 1 EXE Windows e 2 DMGs macOS")
+          Path("release/SHA256SUMS.txt").write_text("".join(lines), encoding="utf-8")
+          PY
+          for asset in release/*.exe release/*.dmg; do
+            filename="$(basename "$asset")"
+            if [[ "$asset" == *.exe ]] && grep -Fxq "$filename" existing-assets.txt; then
+              echo "Preservando EXE existente: $filename"
+              continue
+            fi
+            gh release upload "$tag" "$asset" --clobber
+          done
+          gh release upload "$tag" release/SHA256SUMS.txt --clobber

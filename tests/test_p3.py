@@ -46,6 +46,7 @@ def test_github_release_update_and_checksum(tmp_path,monkeypatch):
     version='99.0.0';installer_name=f'NutriDesktop-Setup-{version}.exe';payload=b'installer-v999';digest=hashlib.sha256(payload).hexdigest()
     fixture_installer=tmp_path/'fixture-setup.exe';fixture_installer.write_bytes(payload)
     release={'tag_name':f'v{version}','draft':False,'prerelease':False,'body':'Teste','published_at':'2026-09-07T00:00:00Z','html_url':'https://github.com/example/release','assets':[{'name':installer_name,'browser_download_url':str(fixture_installer)},{'name':'SHA256SUMS.txt','browser_download_url':'https://example/SHA256SUMS.txt'}]}
+    monkeypatch.setattr(us.platform,'system',lambda: 'Windows')
     monkeypatch.setattr(us,'_read_json',lambda url:release)
     def fake_read(url):
         if url.endswith('SHA256SUMS.txt'):return f'{digest}  {installer_name}\n'.encode()
