@@ -641,7 +641,9 @@ class UiRefinementMixin:
             )
             if choice != QMessageBox.Yes:
                 return
-        return super().set_appointment_status(status)
+        result = super().set_appointment_status(status)
+        self._set_search_feedback(f"Consulta marcada como {status.lower()}.")
+        return result
 
     @staticmethod
     def _agenda_filter_date(widget) -> str:
