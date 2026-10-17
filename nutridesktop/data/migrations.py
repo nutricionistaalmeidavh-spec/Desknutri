@@ -172,6 +172,10 @@ def migrate(conn:sqlite3.Connection,target=SCHEMA_VERSION):
     v=current_version(conn)
     for m in MIGRATIONS:
         if v < m.version <= target:
+            if m.version == 14:
+                # Legacy additive columns predate formal migrations; the active-plan index needs them.
+                _ensure_legacy_columns(conn)
+                conn.commit()
             conn.executescript(m.sql)
             conn.execute("UPDATE schema_meta SET version=?",(m.version,)); conn.commit(); v=m.version
     _ensure_legacy_columns(conn); conn.commit()
