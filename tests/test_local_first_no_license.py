@@ -40,5 +40,6 @@ def test_optional_pin_remains_available(tmp_path):
     assert not security.verify("0000")
 
 def test_schema_unchanged():
-    assert APP_VERSION == "6.5.0"
+    # Release patch versions can change without altering the clinical schema.
+    assert tuple(int(piece) for piece in APP_VERSION.split(".")) >= (6, 5, 0)
     assert SCHEMA_VERSION == 13
