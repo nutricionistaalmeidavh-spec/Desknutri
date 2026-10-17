@@ -10,7 +10,12 @@ class BaseRepo:
 
 class PatientRepository(BaseRepo):
     def create(self,nome,sexo,nascimento="",telefone="",email="",observacoes=""):
+        nome=nome.strip(); email=email.strip().lower(); nascimento=(nascimento or "").strip()
         with self.db.transaction() as c:
+            if email and c.execute("SELECT id FROM pacientes WHERE lower(trim(email))=?",(email,)).fetchone():
+                raise ValueError("Já existe paciente cadastrado com este e-mail.")
+            if nascimento and c.execute("SELECT id FROM pacientes WHERE lower(trim(nome))=lower(?) AND data_nascimento=?",(nome,nascimento)).fetchone():
+                raise ValueError("Paciente com nome e nascimento já cadastrado. Abra o prontuário existente.")
             cur=c.execute("INSERT INTO pacientes(nome,sexo,data_nascimento,telefone,email,observacoes,atualizado_em) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)",(nome,sexo,nascimento,telefone,email,observacoes)); pid=cur.lastrowid
             self._event(c,pid,"paciente","Cadastro do paciente",pid,{})
             return pid
@@ -18,6 +23,16 @@ class PatientRepository(BaseRepo):
         allowed={"nome","sexo","data_nascimento","telefone","email","observacoes"}; data={k:v for k,v in fields.items() if k in allowed}
         if not data:return
         with self.db.transaction() as c:
+            current=c.execute("SELECT nome,data_nascimento FROM pacientes WHERE id=?",(pid,)).fetchone()
+            if not current:raise ValueError("Paciente não localizado.")
+            if 'email' in data:
+                data['email']=(data['email'] or '').strip().lower()
+                if data['email'] and c.execute("SELECT id FROM pacientes WHERE lower(trim(email))=? AND id<>?",(data['email'],pid)).fetchone():
+                    raise ValueError("Este e-mail já pertence a outro paciente.")
+            new_name=(data.get('nome') or current['nome']).strip()
+            new_birth=(data.get('data_nascimento') or current['data_nascimento'] or '').strip()
+            if new_birth and c.execute("SELECT id FROM pacientes WHERE lower(trim(nome))=lower(?) AND data_nascimento=? AND id<>?",(new_name,new_birth,pid)).fetchone():
+                raise ValueError("Outro paciente já usa esse nome e nascimento.")
             c.execute("UPDATE pacientes SET "+",".join(f"{k}=?" for k in data)+", atualizado_em=CURRENT_TIMESTAMP WHERE id=?",(*data.values(),pid))
             c.execute("INSERT INTO audit_log(entity_type,entity_id,action,details_json) VALUES('paciente',?,'update',?)",(pid,json.dumps(list(data))))
     def get(self,pid):
@@ -34,6 +49,7 @@ class AssessmentRepository(BaseRepo):
         with self.db.transaction() as c:
             cur=c.execute(f"INSERT INTO avaliacoes({cols}) VALUES({qs})",tuple(data.values())); aid=cur.lastrowid
             self._snapshot(c,aid,"criação")
+            c.execute("UPDATE manual_pending_actions SET resolved_at=CURRENT_TIMESTAMP WHERE paciente_id=? AND kind='reassess_after_consultation' AND resolved_at IS NULL",(pid,))
             c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(pid,"avaliacao",data.get("data") or date.today().isoformat(),"Avaliação nutricional",aid)); return aid
     def update_versioned(self,aid,changes,motivo="Correção clínica"):
         with self.db.transaction() as c:
@@ -51,6 +67,16 @@ class AssessmentRepository(BaseRepo):
         with self.db.connect() as c:return c.execute("SELECT * FROM avaliacoes WHERE paciente_id=? ORDER BY data,id",(pid,)).fetchall()
     def revisions(self,aid):
         with self.db.connect() as c:return c.execute("SELECT * FROM avaliacao_revisoes WHERE avaliacao_id=? ORDER BY versao DESC",(aid,)).fetchall()
+    def latest_body_measurement(self,pid):
+        """Common read model: latest measurement, with its source, without copying clinical rows."""
+        with self.db.connect() as c:
+            return c.execute("""SELECT * FROM (
+                SELECT data,peso,altura_cm,imc,'Avaliação nutricional' AS origem,id AS origem_id
+                  FROM avaliacoes WHERE paciente_id=?
+                UNION ALL
+                SELECT data,peso,altura_cm,imc,'Crescimento WHO' AS origem,id AS origem_id
+                  FROM growth_measurements WHERE paciente_id=?
+            ) ORDER BY data DESC, CASE origem WHEN 'Avaliação nutricional' THEN 0 ELSE 1 END,origem_id DESC LIMIT 1""",(pid,pid)).fetchone()
 
 class FoodRepository(BaseRepo):
     def search(self,text,limit=50):
@@ -78,8 +104,13 @@ class PlanRepository(BaseRepo):
         with self.db.transaction() as c:
             ver=1
             if parent_plan_id:
-                row=c.execute("SELECT COALESCE(MAX(version_no),0)+1 FROM planos WHERE id=? OR parent_plan_id=?",(parent_plan_id,parent_plan_id)).fetchone(); ver=row[0]
+                ancestor=c.execute("SELECT id,paciente_id,parent_plan_id FROM planos WHERE id=?",(parent_plan_id,)).fetchone()
+                if not ancestor or ancestor['paciente_id']!=pid:raise ValueError("Plano de origem não pertence ao paciente.")
+                parent_plan_id=ancestor['parent_plan_id'] or ancestor['id']
+                ver=c.execute("SELECT COALESCE(MAX(version_no),0)+1 FROM planos WHERE id=? OR parent_plan_id=?",(parent_plan_id,parent_plan_id)).fetchone()[0]
+                c.execute("UPDATE planos SET status='Histórico' WHERE id=? OR parent_plan_id=?",(parent_plan_id,parent_plan_id))
             cur=c.execute("INSERT INTO planos(paciente_id,nome,data,vet_meta,observacoes,parent_plan_id,version_no,status) VALUES(?,?,?,?,?,?,?,'Ativo')",(pid,nome,date.today().isoformat(),vet_meta,obs,parent_plan_id,ver)); plan=cur.lastrowid
+            c.execute("UPDATE manual_pending_actions SET resolved_at=CURRENT_TIMESTAMP WHERE paciente_id=? AND kind='plan_update_after_consultation' AND resolved_at IS NULL",(pid,))
             c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(pid,"plano",date.today().isoformat(),f"Plano alimentar v{ver}",plan)); return plan
     def add_food(self,plan_id,meal,food_id,grams):
         with self.db.transaction() as c:c.execute("INSERT INTO plano_itens(plano_id,refeicao,alimento_id,quantidade_g) VALUES(?,?,?,?)",(plan_id,meal,food_id,grams)); self._snapshot(c,plan_id)
@@ -94,8 +125,8 @@ class PlanRepository(BaseRepo):
             old=c.execute("SELECT * FROM planos WHERE id=?",(plan_id,)).fetchone()
             if not old:raise KeyError(plan_id)
             root=old['parent_plan_id'] or old['id'];ver=c.execute("SELECT COALESCE(MAX(version_no),0)+1 FROM planos WHERE id=? OR parent_plan_id=?",(root,root)).fetchone()[0]
+            c.execute("UPDATE planos SET status='Histórico' WHERE id=? OR parent_plan_id=?",(root,root))
             cur=c.execute("INSERT INTO planos(paciente_id,nome,data,vet_meta,observacoes,parent_plan_id,version_no,status) VALUES(?,?,?,?,?,?,?,'Ativo')",(old['paciente_id'],name or old['nome'],date.today().isoformat(),old['vet_meta'],old['observacoes'],root,ver));new=cur.lastrowid
-            c.execute("UPDATE planos SET status='Histórico' WHERE id=?",(plan_id,))
             old_item_ids=[r['id'] for r in c.execute("SELECT id FROM plano_itens WHERE plano_id=? ORDER BY id",(plan_id,)).fetchall()]
             c.execute("INSERT INTO plano_itens(plano_id,refeicao,alimento_id,quantidade_g,receita_id,quantidade_porcoes) SELECT ?,refeicao,alimento_id,quantidade_g,receita_id,quantidade_porcoes FROM plano_itens WHERE plano_id=? ORDER BY id",(new,plan_id))
             new_item_ids=[r['id'] for r in c.execute("SELECT id FROM plano_itens WHERE plano_id=? ORDER BY id",(new,)).fetchall()]
@@ -105,9 +136,10 @@ class PlanRepository(BaseRepo):
                 if mapped:c.execute("INSERT INTO plano_substituicoes(plano_id,plano_item_id,alternative_food_id,quantidade_g,note) VALUES(?,?,?,?,?)",(new,mapped,sub['alternative_food_id'],sub['quantidade_g'],sub['note']))
             c.execute("INSERT INTO plano_metas(plano_id,nutriente,meta,unidade,limite_min,limite_max) SELECT ?,nutriente,meta,unidade,limite_min,limite_max FROM plano_metas WHERE plano_id=?",(new,plan_id))
             c.execute("INSERT INTO refeicao_metas(plano_id,refeicao,percentual_vet) SELECT ?,refeicao,percentual_vet FROM refeicao_metas WHERE plano_id=?",(new,plan_id))
+            c.execute("UPDATE manual_pending_actions SET resolved_at=CURRENT_TIMESTAMP WHERE paciente_id=? AND kind='plan_update_after_consultation' AND resolved_at IS NULL",(old['paciente_id'],))
             c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(old['paciente_id'],'plano',date.today().isoformat(),f'Plano alimentar v{ver}',new));return new
     def list(self,pid):
-        with self.db.connect() as c:return c.execute("SELECT * FROM planos WHERE paciente_id=? ORDER BY id DESC",(pid,)).fetchall()
+        with self.db.connect() as c:return c.execute("SELECT * FROM planos WHERE paciente_id=? ORDER BY CASE WHEN status='Ativo' THEN 0 ELSE 1 END,id DESC",(pid,)).fetchall()
     def items(self,plan_id):
         with self.db.connect() as c:
             return c.execute("""SELECT pi.*,a.descricao,a.kcal,a.proteina,a.lipideos,a.carboidrato,a.fibra,
@@ -203,9 +235,19 @@ class AgendaRepository(BaseRepo):
     def update_clinical_context(self,cid,objetivo=None,abordagem=None,observacoes=None):
         with self.db.transaction() as c:
             c.execute("UPDATE consultas SET objetivo=COALESCE(?,objetivo),abordagem=COALESCE(?,abordagem),observacoes=COALESCE(?,observacoes) WHERE id=?",(objetivo,abordagem,observacoes,cid))
-    def mark_plan_sent(self,cid,when=None):
-        stamp=when or __import__('datetime').datetime.now().isoformat(timespec='seconds')
-        with self.db.transaction() as c:c.execute("UPDATE consultas SET plano_enviado_em=? WHERE id=?",(stamp,cid))
+    def mark_plan_sent(self,cid,when=None,plan_id=None):
+        stamp=when or datetime.now().isoformat(timespec='seconds')
+        with self.db.transaction() as c:
+            appointment=c.execute("SELECT paciente_id FROM consultas WHERE id=?",(cid,)).fetchone()
+            if not appointment:raise ValueError("Consulta não encontrada.")
+            version=None
+            if plan_id is not None:
+                plan=c.execute("SELECT paciente_id,version_no,status FROM planos WHERE id=?",(plan_id,)).fetchone()
+                if not plan or plan['paciente_id']!=appointment['paciente_id']:raise ValueError("Plano não pertence ao paciente da consulta.")
+                if plan['status']!='Ativo':raise ValueError("Selecione a versão ativa do plano.")
+                version=plan['version_no']
+            c.execute("UPDATE consultas SET plano_enviado_em=?,plano_id_enviado=?,plano_versao_enviada=? WHERE id=?",
+                      (stamp,plan_id,version,cid))
     def pending_plan_delivery(self):
         q="""SELECT c.*,p.nome paciente_nome FROM consultas c JOIN pacientes p ON p.id=c.paciente_id
              WHERE c.status='Realizada' AND c.plano_enviado_em IS NULL
@@ -221,10 +263,10 @@ class AgendaRepository(BaseRepo):
     def latest_pending_plan(self,pid):
         with self.db.connect() as c:
             return c.execute("SELECT * FROM consultas WHERE paciente_id=? AND status='Realizada' AND plano_enviado_em IS NULL ORDER BY data DESC,hora DESC,id DESC LIMIT 1",(pid,)).fetchone()
-    def mark_latest_plan_sent(self,pid,when=None):
+    def mark_latest_plan_sent(self,pid,when=None,plan_id=None):
         row=self.latest_pending_plan(pid)
         if not row:return None
-        self.mark_plan_sent(row['id'],when);return row['id']
+        self.mark_plan_sent(row['id'],when,plan_id=plan_id);return row['id']
 
 class TemplateRepository(BaseRepo):
     def save(self,name,typ,content,template_id=None,style_key=None,specialty_tags=None,is_default=None,preview_json=None):

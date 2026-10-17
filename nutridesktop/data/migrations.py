@@ -125,6 +125,26 @@ ALTER TABLE document_templates ADD COLUMN specialty_tags TEXT DEFAULT '';
 ALTER TABLE document_templates ADD COLUMN is_default INTEGER DEFAULT 0;
 ALTER TABLE document_templates ADD COLUMN preview_json TEXT DEFAULT '{}';
 '''),
+Migration(14,"canonical_clinical_flow",r'''
+ALTER TABLE lab_results ADD COLUMN import_fingerprint TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_import_fingerprint ON lab_results(import_fingerprint) WHERE import_fingerprint IS NOT NULL;
+ALTER TABLE consultas ADD COLUMN plano_id_enviado INTEGER REFERENCES planos(id) ON DELETE SET NULL;
+ALTER TABLE consultas ADD COLUMN plano_versao_enviada INTEGER;
+ALTER TABLE consultas ADD COLUMN finalization_key TEXT;
+ALTER TABLE consultas ADD COLUMN reassessment_requested INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE consultas ADD COLUMN plan_update_requested INTEGER NOT NULL DEFAULT 0;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consultas_finalization_key ON consultas(finalization_key) WHERE finalization_key IS NOT NULL;
+-- Preserve all historical plan rows but reconcile prior conflicting active siblings.
+UPDATE planos SET status='Histórico'
+ WHERE status='Ativo' AND EXISTS (
+   SELECT 1 FROM planos newer
+    WHERE newer.paciente_id=planos.paciente_id
+      AND COALESCE(newer.parent_plan_id,newer.id)=COALESCE(planos.parent_plan_id,planos.id)
+      AND newer.status='Ativo' AND newer.id>planos.id
+ );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_one_active_per_family
+ ON planos(paciente_id,COALESCE(parent_plan_id,id)) WHERE status='Ativo';
+'''),
 ]
 
 def current_version(conn: sqlite3.Connection) -> int:
@@ -154,6 +174,10 @@ def migrate(conn:sqlite3.Connection,target=SCHEMA_VERSION):
     v=current_version(conn)
     for m in MIGRATIONS:
         if v < m.version <= target:
+            if m.version == 14:
+                # Legacy additive columns predate formal migrations; the active-plan index needs them.
+                _ensure_legacy_columns(conn)
+                conn.commit()
             conn.executescript(m.sql)
             conn.execute("UPDATE schema_meta SET version=?",(m.version,)); conn.commit(); v=m.version
     _ensure_legacy_columns(conn); conn.commit()
