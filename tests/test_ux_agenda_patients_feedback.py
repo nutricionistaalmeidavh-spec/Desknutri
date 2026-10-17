@@ -4,6 +4,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QMessageBox,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -170,3 +171,28 @@ def test_empty_state_updates_content_without_duplicate_widgets():
     assert state.title_label.text() == "Resultado vazio"
     assert state.message_label.text() == "Ajuste o filtro"
     assert state.body.count() == original_count
+
+
+def test_agenda_requires_confirmation_before_absence_or_cancellation(monkeypatch):
+    _app()
+    harness = _AgendaHarness()
+    page = harness.agenda()
+    assert page is not None
+    harness.set_appointment_status("Realizada")
+    assert harness.ag.statuses == []
+    harness.ag_table.selectRow(0)
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.No)
+    harness.set_appointment_status("Cancelada")
+    assert harness.ag.statuses == []
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    harness.set_appointment_status("Faltou")
+    assert harness.ag.statuses == [(7, "Faltou")]
+    assert not any(a.isEnabled() for a in harness.agenda_status_buttons.values())
+
+
+def test_global_search_aliases_reach_operational_pages():
+    assert UiRefinementMixin.PAGE_ALIASES["atualizações"] == "Atualizações"
+    assert UiRefinementMixin.PAGE_ALIASES["exportacoes"] == "Exportações"
+    assert UiRefinementMixin.PAGE_ALIASES["suporte"] == "Suporte"
