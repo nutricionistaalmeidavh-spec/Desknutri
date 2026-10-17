@@ -1,3 +1,13 @@
+# NutriDesktop 6.5.1 — Canonicidade clínica e proteção contra duplicações
+
+- Consulta guiada conclui o agendamento existente, com gravação transacional e repetição idempotente.
+- Importações de pacientes, avaliações e exames evitam reinserção idêntica; conflitos de identidade exigem revisão.
+- Uma única versão ativa por família de planos; migração preserva versões históricas.
+- Entrega do plano vinculada ao plano e à versão efetivamente selecionados.
+- Medidas nutricionais e crescimento WHO são consultadas por leitura longitudinal com identificação da origem.
+- Ações de reavaliação e atualização do plano permanecem pendentes até existir registro clínico real.
+- SQLite schema 14, sem alteração de licença e sem dependência paga.
+
 # NutriDesktop 6.5.0 — Execução local sem bloqueio comercial
 
 - Remove a exigência de e-mail liberado, conta, senha comercial e validação de licença antes da abertura.
