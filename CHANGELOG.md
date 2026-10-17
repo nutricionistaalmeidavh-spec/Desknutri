@@ -1,3 +1,13 @@
+# NutriDesktop 6.5.1 — Atualização integrada e recuperação segura
+
+- Verificação de novas GitHub Releases em thread Qt, sem bloquear a interface principal.
+- Download em blocos, progresso visível e arquivo temporário até conferir SHA-256.
+- Confirmação explícita do nutricionista antes do download e instalação.
+- Backup SQLite consistente antes de instalar, preservando dados e documentos na pasta do usuário.
+- Atualização silenciosa do Inno Setup (sujeita à permissão do Windows) depois que o NutriDesk fecha; reabertura automática após conclusão ou falha.
+- Conferência da versão e integridade do SQLite na próxima abertura; em caso de problema, preserva backup e informa o caminho de recuperação.
+- Mantidos PySide6/Python, PIN local, AppId do Inno Setup, schema 13 e ausência de licenciamento comercial.
+
 # NutriDesktop 6.5.0 — Execução local sem bloqueio comercial
 
 - Remove a exigência de e-mail liberado, conta, senha comercial e validação de licença antes da abertura.
