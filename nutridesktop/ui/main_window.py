@@ -46,7 +46,7 @@ class PinDialog(QDialog):
         else:QMessageBox.warning(self,'PIN','PIN inválido.')
 
 class MainWindow(QMainWindow):
-    NAV=['Dashboard','Pacientes','Agenda','Biblioteca','Conta','Configurações']
+    NAV=['Dashboard','Pacientes','Agenda','Biblioteca','Configurações']
     def __init__(self):
         super().__init__();self.setObjectName('nutridesk-main');self.setWindowTitle(f'NutriDesk {APP_VERSION}');self.resize(1440,900)
         theme_manager=QApplication.instance().property('theme_manager');self.theme_manager=theme_manager

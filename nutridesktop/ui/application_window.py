@@ -4,14 +4,13 @@ from .auto_update_features import GitHubReleaseUpdateMixin
 from .final_polish import FinalPolishMixin
 from .main_window import MainWindow as CoreMainWindow
 from .refinement import UiRefinementMixin
-from .window_features import AccountFeaturesMixin, OperationalFeaturesMixin
+from .window_features import OperationalFeaturesMixin
 
 
 class MainWindow(
     FinalPolishMixin,
     GitHubReleaseUpdateMixin,
     UiRefinementMixin,
-    AccountFeaturesMixin,
     OperationalFeaturesMixin,
     CoreMainWindow,
 ):
@@ -28,7 +27,6 @@ class MainWindow(
         "Pacientes",
         "Agenda",
         "Biblioteca",
-        "Conta",
         "Atualizações",
         "Exportações",
         "Suporte",

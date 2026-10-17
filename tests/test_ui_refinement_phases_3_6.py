@@ -3,15 +3,15 @@ from pathlib import Path
 from nutridesktop.ui.application_window import MainWindow
 from nutridesktop.ui.main_window import MainWindow as CoreMainWindow
 from nutridesktop.ui.refinement import UiRefinementMixin
-from nutridesktop.ui.window_features import AccountFeaturesMixin, OperationalFeaturesMixin
+from nutridesktop.ui.window_features import OperationalFeaturesMixin
 from nutridesktop.ui_kit.components import StatusBadge, TableToolbar, UiButton, status_tone
 from nutridesktop.ui_kit.theme import DEFAULT_THEME, THEMES, build_stylesheet, get_theme
 
 
 def test_canonical_window_keeps_behavior_layers_after_ui_refinement():
     mro = MainWindow.__mro__
-    assert mro.index(UiRefinementMixin) < mro.index(AccountFeaturesMixin)
-    assert mro.index(AccountFeaturesMixin) < mro.index(OperationalFeaturesMixin)
+    assert mro.index(UiRefinementMixin) < mro.index(OperationalFeaturesMixin)
+    assert mro.index(OperationalFeaturesMixin) > mro.index(UiRefinementMixin)
     assert mro.index(OperationalFeaturesMixin) < mro.index(CoreMainWindow)
 
 
