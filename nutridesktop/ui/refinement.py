@@ -65,6 +65,11 @@ class UiRefinementMixin:
         "configurações": "Configurações",
         "configuracoes": "Configurações",
         "backup": "Configurações",
+        "atualizações": "Atualizações",
+        "atualizacoes": "Atualizações",
+        "exportações": "Exportações",
+        "exportacoes": "Exportações",
+        "suporte": "Suporte",
     }
 
     # ------------------------------------------------------------------ shell
