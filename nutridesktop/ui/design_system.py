@@ -22,10 +22,24 @@ class StatCard(Card):
             d=QLabel(str(detail));d.setObjectName('muted');self.body.addWidget(d)
 
 class EmptyState(Card):
+    """Estado vazio com mensagem contextual, sem recriar o widget."""
     def __init__(self,title,message='',parent=None):
-        super().__init__(parent);t=QLabel(title);t.setAlignment(Qt.AlignCenter);t.setStyleSheet('font-size:16px;font-weight:700');self.body.addWidget(t)
-        if message:
-            m=QLabel(message);m.setObjectName('muted');m.setWordWrap(True);m.setAlignment(Qt.AlignCenter);self.body.addWidget(m)
+        super().__init__(parent)
+        self.title_label=QLabel(title)
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setStyleSheet('font-size:16px;font-weight:700')
+        self.body.addWidget(self.title_label)
+        self.message_label=QLabel(message)
+        self.message_label.setObjectName('muted')
+        self.message_label.setWordWrap(True)
+        self.message_label.setAlignment(Qt.AlignCenter)
+        self.message_label.setVisible(bool(message))
+        self.body.addWidget(self.message_label)
+
+    def set_content(self,title,message=''):
+        self.title_label.setText(title)
+        self.message_label.setText(message)
+        self.message_label.setVisible(bool(message))
 
 
 class LoadingState(Card):
@@ -45,7 +59,7 @@ class ThemeSelector(Card):
     def __init__(self,current,on_change,parent=None):
         super().__init__(parent,soft=True);self.group=QButtonGroup(self);self.group.setExclusive(True)
         self.body.addWidget(section_title('Aparência'))
-        self.body.addWidget(muted('Escolha o tema da interface. O tema escuro profissional é o padrão do NutriDesk.'))
+        self.body.addWidget(muted('O tema rosé é o padrão do NutriDesk. O tema escuro profissional continua disponível.'))
         for key,theme in THEMES.items():
             b=QPushButton(theme.label);b.setCheckable(True);b.setChecked(key==current);b.setProperty('primary',key==current)
             b.clicked.connect(lambda checked=False,k=key:on_change(k) if checked else None);self.group.addButton(b);self.body.addWidget(b)
