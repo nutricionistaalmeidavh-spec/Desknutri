@@ -5,7 +5,7 @@ from datetime import date,datetime
 NAV_GROUPS=OrderedDict([
     ('TRABALHO',['Dashboard','Pacientes','Agenda']),
     ('CONTEÚDO',['Biblioteca']),
-    ('SISTEMA',['Conta','Configurações']),
+    ('SISTEMA',['Configurações']),
 ])
 
 
