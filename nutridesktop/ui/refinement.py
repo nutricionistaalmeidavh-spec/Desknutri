@@ -61,9 +61,6 @@ class UiRefinementMixin:
         "crescimento": "Crescimento WHO",
         "who": "Crescimento WHO",
         "materno": "Materno-infantil",
-        "conta": "Conta",
-        "licença": "Conta",
-        "licenca": "Conta",
         "configurações": "Configurações",
         "configuracoes": "Configurações",
         "backup": "Configurações",
@@ -113,7 +110,6 @@ class UiRefinementMixin:
         profile_layout = QHBoxLayout(profile)
         profile_layout.setContentsMargins(0, 10, 0, 0)
         profile_layout.setSpacing(4)
-        profile_layout.addWidget(button("Conta", lambda: self.show_page("Conta"), variant="ghost", compact=True))
         profile_layout.addStretch()
         version = QLabel(f"v{APP_VERSION}")
         version.setObjectName("muted")
@@ -146,7 +142,6 @@ class UiRefinementMixin:
         self.global_search.setMaximumWidth(420)
         self.global_search.returnPressed.connect(self.run_global_search)
         topbar_layout.addWidget(self.global_search, 1)
-        topbar_layout.addWidget(button("Conta", lambda: self.show_page("Conta"), variant="ghost", compact=True))
         main_layout.addWidget(topbar)
 
         self.stack = QStackedWidget()
