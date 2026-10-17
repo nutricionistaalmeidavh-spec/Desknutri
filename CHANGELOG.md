@@ -1,3 +1,12 @@
+# NutriDesktop 6.5.2 — Atualização integrada e recuperação segura
+
+- Verificação da GitHub Release estável em QThread, sem bloquear a interface principal.
+- Download em blocos, progresso e verificação SHA-256, sem publicar arquivos parciais.
+- Instalação integrada do Inno Setup no Windows após confirmação explícita do nutricionista e autorização do Windows.
+- Backup SQLite consistente antes de instalar; reabertura do programa e verificação de integridade pós-atualização.
+- Preservadas a canonicidade clínica da versão 6.5.1, consulta guiada, deduplicações, agenda, PIN local e schema 14.
+- Mantidos PySide6, Python, Inno Setup e ferramentas gratuitas, sem Electron ou serviço pago obrigatório.
+
 # NutriDesktop 6.5.1 — Canonicidade clínica e proteção contra duplicações
 
 - Consulta guiada conclui o agendamento existente, com gravação transacional e repetição idempotente.

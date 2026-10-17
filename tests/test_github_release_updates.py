@@ -39,9 +39,11 @@ def test_updater_is_user_confirmed_not_silent():
     src = (ROOT / "nutridesktop" / "ui" / "auto_update_features.py").read_text(encoding="utf-8")
     service = (ROOT / "nutridesktop" / "services" / "update_service.py").read_text(encoding="utf-8")
     assert "QMessageBox.question" in src
-    assert "Deseja baixar e abrir o instalador agora?" in src
-    assert "/VERYSILENT" not in service
-    assert "subprocess.Popen([str(installer)]" in service
+    assert "Deseja instalar agora?" in src
+    assert "QThread" in src
+    assert "/VERYSILENT" in service  # UAC still applies; wizard is suppressed.
+    assert "subprocess.Popen(" in service
+    assert "backup_before_update" in service
 
 
 def test_release_workflow_needs_no_update_signing_secret():

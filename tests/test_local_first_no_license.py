@@ -40,5 +40,5 @@ def test_optional_pin_remains_available(tmp_path):
     assert not security.verify("0000")
 
 def test_local_first_survives_schema_upgrade():
-    assert APP_VERSION == "6.5.1"
+    assert tuple(int(segment) for segment in APP_VERSION.split(".")) >= (6, 5, 1)
     assert SCHEMA_VERSION == 14
