@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QApplication, QCheckBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QTextEdit
@@ -33,7 +34,7 @@ class GitHubReleaseUpdateMixin:
     def updates_page(self):
         w, v = self.page(
             "Atualizações",
-            "O NutriDesk consulta as versões estáveis no GitHub e instala após sua confirmação.",
+            "O NutriDesk consulta as versões estáveis no GitHub e atualiza após sua confirmação.",
         )
         v.addWidget(QLabel(
             f"Instalado: App {APP_VERSION} | Schema {SCHEMA_VERSION} | "
@@ -153,16 +154,20 @@ class GitHubReleaseUpdateMixin:
         if info is None:
             self.check_updates(silent=False)
             return
-        if os.name != "nt":
-            QMessageBox.information(self, "Atualizações", "A instalação integrada exige Windows.")
+        is_mac = sys.platform == "darwin"
+        if os.name != "nt" and not is_mac:
+            QMessageBox.information(self, "Atualizações", "Atualização indisponível neste sistema.")
             return
         if not skip_confirmation:
             answer = QMessageBox.question(
                 self, "Instalar atualização",
                 f"Atualizar para NutriDesk {info.version}?\n\n"
-                "O sistema fará backup do banco clínico antes de fechar, "
-                "instalar e reabrir automaticamente. "
-                "O Windows poderá solicitar permissão de administrador.",
+                ("Um backup do banco clínico será criado antes de abrir o DMG. "
+                 "Depois, feche o NutriDesk, arraste o aplicativo para Aplicativos "
+                 "e confirme a substituição." if is_mac else
+                 "O sistema fará backup do banco clínico antes de fechar, "
+                 "instalar e reabrir automaticamente. "
+                 "O Windows poderá solicitar permissão de administrador."),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
             )
             if answer != QMessageBox.Yes:
@@ -172,14 +177,23 @@ class GitHubReleaseUpdateMixin:
 
         def staged(items):
             installer, backup = items
-            self._update_status("Instalador verificado. Backup concluído. Reiniciando para atualizar…")
+            self._update_status("Instalador verificado. Backup clínico concluído.")
             try:
                 self.update_service.launch_staged(info, installer, backup)
             except Exception as exc:
                 show_error(self, "Atualização", exc)
                 return
-            # Wait for QThread.finished before quitting: avoids destroying an active thread.
-            self._close_after_updater = True
+            if is_mac:
+                self._update_status("DMG aberto no Finder. Feche o NutriDesk, copie-o para Aplicativos e substitua a versão anterior.")
+                QMessageBox.information(
+                    self, "Atualização do macOS",
+                    "O instalador foi aberto no Finder.\n\n"
+                    "Feche o NutriDesk, arraste NutriDesk.app para Aplicativos e confirme a substituição.\n\n"
+                    "O backup dos dados clínicos já foi criado.",
+                )
+            else:
+                # Wait for QThread.finished before quitting: avoids destroying an active thread.
+                self._close_after_updater = True
 
         self._start_update_worker(
             lambda progress: self.update_service.stage(info, progress=progress), staged
