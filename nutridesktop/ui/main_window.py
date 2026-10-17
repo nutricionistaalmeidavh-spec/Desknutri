@@ -152,7 +152,14 @@ class MainWindow(QMainWindow):
             from .consultation_dialog import ConsultationDialog
             dlg=ConsultationDialog(pats,self.ag,parent=self)
             if dlg.exec()==QDialog.Accepted:
-                self.pages.pop('Dashboard',None);self.pages.pop('Agenda',None);self.show_page('Dashboard')
+                self.pages.pop('Dashboard',None);self.pages.pop('Agenda',None)
+                if dlg.post_finish_focus:
+                    # Continue actual work in the patient's record; never fabricate an assessment or plan.
+                    from .refined_patient_dialog import RefinedPatientDialog
+                    detail=RefinedPatientDialog(int(dlg.patient.currentData()),self)
+                    detail.tabs.setCurrentIndex(2 if dlg.post_finish_focus=='Avaliações' else 3)
+                    detail.exec()
+                self.show_page('Dashboard')
         except Exception as e:show_error(self,'Nova consulta',e)
     def agenda(self):
         w,v=self.page('Agenda','Selecione uma data no calendário e acompanhe consultas, retornos e status.');split=QHBoxLayout();self.ag_calendar=QCalendarWidget();self.ag_calendar.setObjectName('agendaCalendar');self.ag_calendar.setGridVisible(True);self.ag_calendar.selectionChanged.connect(self._agenda_calendar_changed);split.addWidget(self.ag_calendar,1)
