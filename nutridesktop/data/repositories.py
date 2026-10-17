@@ -23,6 +23,16 @@ class PatientRepository(BaseRepo):
         allowed={"nome","sexo","data_nascimento","telefone","email","observacoes"}; data={k:v for k,v in fields.items() if k in allowed}
         if not data:return
         with self.db.transaction() as c:
+            current=c.execute("SELECT nome,data_nascimento FROM pacientes WHERE id=?",(pid,)).fetchone()
+            if not current:raise ValueError("Paciente não localizado.")
+            if 'email' in data:
+                data['email']=(data['email'] or '').strip().lower()
+                if data['email'] and c.execute("SELECT id FROM pacientes WHERE lower(trim(email))=? AND id<>?",(data['email'],pid)).fetchone():
+                    raise ValueError("Este e-mail já pertence a outro paciente.")
+            new_name=(data.get('nome') or current['nome']).strip()
+            new_birth=(data.get('data_nascimento') or current['data_nascimento'] or '').strip()
+            if new_birth and c.execute("SELECT id FROM pacientes WHERE lower(trim(nome))=lower(?) AND data_nascimento=? AND id<>?",(new_name,new_birth,pid)).fetchone():
+                raise ValueError("Outro paciente já usa esse nome e nascimento.")
             c.execute("UPDATE pacientes SET "+",".join(f"{k}=?" for k in data)+", atualizado_em=CURRENT_TIMESTAMP WHERE id=?",(*data.values(),pid))
             c.execute("INSERT INTO audit_log(entity_type,entity_id,action,details_json) VALUES('paciente',?,'update',?)",(pid,json.dumps(list(data))))
     def get(self,pid):
