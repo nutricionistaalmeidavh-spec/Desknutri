@@ -37,12 +37,27 @@ class PatientDialog(QDialog):
         super().__init__(parent);self.pid=pid;self.pr=PatientRepository();self.ar=AssessmentRepository();self.pl=PlanRepository();self.fr=FoodRepository();self.docs=DocumentService();self.tr=TimelineRepository();self.anr=AnamnesisRepository();self.phr=PhotoRepository();self.rr=RecipeRepository();self.ag=AgendaRepository();self.gs=GrowthService();self.setWindowTitle('Prontuário • NutriDesk');self.resize(1180,800)
         root=QVBoxLayout(self);head=QHBoxLayout();self.title=QLabel();self.title.setStyleSheet('font-size:26px;font-weight:800');head.addWidget(self.title);self.header_meta=QLabel();self.header_meta.setStyleSheet('color:#697571');head.addWidget(self.header_meta);head.addStretch();head.addWidget(button('Nova consulta',self.open_guided_consultation,True));head.addWidget(button('Editar paciente',self.open_profile_editor));root.addLayout(head)
         self.tabs=QTabWidget();root.addWidget(self.tabs);self.tabs.addTab(self.summary_tab(),'Resumo');self.tabs.addTab(self.consultation_tab(),'Consulta');self.tabs.addTab(self.assessment_tab(),'Avaliações');self.tabs.addTab(self.plan_tab(),'Plano alimentar');self.tabs.addTab(self.evolution_workspace_tab(),'Evolução');self.tabs.addTab(self.files_workspace_tab(),'Arquivos');self.refresh_header()
+        self._refreshing_summary=False
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+    def _on_tab_changed(self,index):
+        if index==0:self.refresh_summary_tab()
+    def refresh_summary_tab(self):
+        if not hasattr(self,'tabs') or getattr(self,'_refreshing_summary',False):return
+        self._refreshing_summary=True
+        try:
+            old=self.tabs.widget(0)
+            self.tabs.removeTab(0)
+            self.tabs.insertTab(0,self.summary_tab(),'Resumo')
+            self.tabs.setCurrentIndex(0)
+            if old is not None:old.deleteLater()
+        finally:self._refreshing_summary=False
     def refresh_header(self):
         p=self.pr.get(self.pid);self.title.setText(p['nome'] if p else 'Paciente')
         if p:self.header_meta.setText(f"{age_label(p['data_nascimento'])}  •  {'Feminino' if p['sexo']=='F' else 'Masculino'}  •  {p['telefone'] or 'sem telefone'}")
     def summary_tab(self):
-        w=QWidget();lay=QVBoxLayout(w);p=self.pr.get(self.pid);ass=self.ar.list(self.pid);latest=ass[-1] if ass else None;plans=self.pl.list(self.pid);timeline=self.tr.list(self.pid)
-        grid=QGridLayout();grid.addWidget(StatCard('Peso',f"{latest['peso']:.1f} kg" if latest and latest['peso'] is not None else '—','Última avaliação'),0,0);grid.addWidget(StatCard('IMC',f"{latest['imc']:.1f}" if latest and latest['imc'] is not None else '—','Última avaliação'),0,1);grid.addWidget(StatCard('Gordura corporal',f"{latest['pg_final']:.1f}%" if latest and latest['pg_final'] is not None else '—','Composição corporal'),0,2);grid.addWidget(StatCard('Plano atual',plans[0]['nome'] if plans else 'Nenhum','Plano alimentar'),0,3);lay.addLayout(grid)
+        w=QWidget();lay=QVBoxLayout(w);p=self.pr.get(self.pid);ass=self.ar.list(self.pid);latest=ass[-1] if ass else None;measure=self.ar.latest_body_measurement(self.pid);plans=self.pl.list(self.pid);current=next((x for x in plans if x['status']=='Ativo'),None);timeline=self.tr.list(self.pid)
+        origin=measure['origem'] if measure else 'Sem avaliação'
+        grid=QGridLayout();grid.addWidget(StatCard('Peso',f"{measure['peso']:.1f} kg" if measure and measure['peso'] is not None else '—',origin),0,0);grid.addWidget(StatCard('IMC',f"{measure['imc']:.1f}" if measure and measure['imc'] is not None else '—',origin),0,1);grid.addWidget(StatCard('Gordura corporal',f"{latest['pg_final']:.1f}%" if latest and latest['pg_final'] is not None else '—','Composição corporal'),0,2);grid.addWidget(StatCard('Plano atual',current['nome'] if current else 'Nenhum','Plano alimentar'),0,3);lay.addLayout(grid)
         cols=QHBoxLayout();left=Card();left.body.addWidget(section_title('Linha do tempo'))
         for e in timeline[:7]:left.body.addWidget(QLabel(f"{e.get('event_date','')}  •  {e.get('title','')}"))
         if not timeline:left.body.addWidget(muted('O histórico clínico aparecerá aqui conforme os atendimentos forem registrados.'))
@@ -66,7 +81,12 @@ class PatientDialog(QDialog):
         try:
             from .consultation_dialog import ConsultationDialog
             dlg=ConsultationDialog(self.pr.list(),self.ag,self,self.pid)
-            if dlg.exec()==QDialog.Accepted:self.refresh_header();self.refresh_timeline();self.refresh_assessments();self.refresh_plans()
+            if dlg.exec()==QDialog.Accepted:
+                self.refresh_header();self.refresh_timeline();self.refresh_assessments();self.refresh_plans()
+                if dlg.post_finish_focus:
+                    tabs={"Avaliações":2,"Plano alimentar":3}
+                    self.tabs.setCurrentIndex(tabs[dlg.post_finish_focus])
+                else:self.refresh_summary_tab()
         except Exception as e:show_error(self,'Consulta',e)
     def open_labs(self):
         from .labs_dialog import LabsDialog
@@ -241,8 +261,17 @@ class PatientDialog(QDialog):
     def mark_plan_sent(self):
         pending=self.ag.latest_pending_plan(self.pid)
         if not pending:QMessageBox.information(self,'Plano alimentar','Não há consulta recente aguardando envio do plano.');return
-        if QMessageBox.question(self,'Plano alimentar',f"Confirmar que o plano da consulta de {pending['data']} foi enviado ao paciente?")!=QMessageBox.Yes:return
-        self.ag.mark_latest_plan_sent(self.pid);QMessageBox.information(self,'Plano alimentar','Plano marcado como enviado. A pendência foi removida do Dashboard.')
+        plan_id=self.selected_plan_id()
+        if plan_id is None:
+            QMessageBox.information(self,'Plano alimentar','Selecione o plano efetivamente entregue.');return
+        plan=next((x for x in self.pl.list(self.pid) if x['id']==plan_id),None)
+        if not plan or plan['status']!='Ativo':
+            QMessageBox.warning(self,'Plano alimentar','Selecione a versão ativa do plano.');return
+        if QMessageBox.question(self,'Plano alimentar',f"Confirmar entrega de {plan['nome']} (versão {plan['version_no']}) para consulta de {pending['data']}?")!=QMessageBox.Yes:return
+        try:
+            self.ag.mark_latest_plan_sent(self.pid,plan_id=plan_id)
+            QMessageBox.information(self,'Plano alimentar','Entrega registrada com plano e versão vinculados à consulta.')
+        except Exception as e:show_error(self,'Plano alimentar',e)
     def save_plan_substitution(self):
         plan_id=self.selected_plan_id();row=self.plan_items.currentRow()
         if not plan_id or row<0:QMessageBox.information(self,'Substituições','Selecione um alimento do plano.');return
