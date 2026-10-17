@@ -77,33 +77,53 @@ def _existing_patients(database):
 
 
 def _resolve_patient(row,patients):
+    """Avoid identifying a patient by an ambiguous name or inconsistent e-mail."""
     pid=_text(row.get('paciente_id'))
+    name=_text(row.get('nome')).casefold()
+    birth=_text(row.get('data_nascimento'))
+    email=_text(row.get('email')).lower()
     if pid:
-        for p in patients:
-            if str(p['id'])==pid:return p
-    em=_text(row.get('email')).lower()
-    if em:
-        for p in patients:
-            if _text(p.get('email')).lower()==em:return p
-    name=_text(row.get('nome')).casefold();birth=_text(row.get('data_nascimento'))
-    if name:
-        matches=[p for p in patients if _text(p.get('nome')).casefold()==name and (not birth or _text(p.get('data_nascimento'))==birth)]
-        if len(matches)==1:return matches[0]
+        matches=[p for p in patients if str(p['id'])==pid]
+        if not matches:raise ValueError('ID de paciente não encontrado')
+        result=matches[0]
+    elif email:
+        matches=[p for p in patients if _text(p.get('email')).lower()==email]
+        if len(matches)>1:raise ValueError('E-mail duplicado em vários pacientes; concilie os cadastros')
+        result=matches[0] if matches else None
+    else:
+        result=None
+    if result:
+        if name and _text(result.get('nome')).casefold()!=name:
+            raise ValueError('Nome divergente do paciente identificado por ID/e-mail')
+        if birth and _text(result.get('data_nascimento'))!=birth:
+            raise ValueError('Nascimento divergente do paciente identificado por ID/e-mail')
+        if email and _text(result.get('email')).lower() not in ('',email):
+            raise ValueError('E-mail divergente do paciente identificado por nome/nascimento')
+        return result
+    if birth and name:
+        matches=[p for p in patients if _text(p.get('nome')).casefold()==name and _text(p.get('data_nascimento'))==birth]
+        if len(matches)>1:raise ValueError('Nome e nascimento ambíguos: concilie os cadastros')
+        if matches:
+            result=matches[0]
+            if email and _text(result.get('email')).lower() not in ('',email):
+                raise ValueError('Conflito de e-mail para paciente com mesmo nome e nascimento')
+            return result
     return None
-
 
 def preview_import(kind,path,database):
     kind={'pacientes':'patients','avaliacoes':'assessments','exames':'labs'}.get(kind,kind)
-    raw_rows=_load(path);preview=ImportPreview(kind,str(path),Path(path).name,len(raw_rows));patients=_existing_patients(database)
+    raw_rows=_load(path);preview=ImportPreview(kind,str(path),Path(path).name,len(raw_rows));patients=_existing_patients(database);staged=list(patients)
     for idx,row in enumerate(raw_rows,start=2):
         try:
             if kind=='patients':
                 name=_text(row.get('nome'));sex=_sex(row.get('sexo'));birth=_text(row.get('data_nascimento'))
                 if not name:raise ValueError('Nome obrigatório')
                 candidate={'nome':name,'sexo':sex or 'F','data_nascimento':birth,'telefone':_text(row.get('telefone')),'email':_text(row.get('email')).lower(),'observacoes':_text(row.get('observacoes')),'_row':idx}
-                dup=_resolve_patient(candidate,patients)
+                dup=_resolve_patient(candidate,staged)
                 if dup:preview.skipped.append({**candidate,'reason':'Paciente duplicado','existing_id':dup['id']})
-                else:preview.rows.append(candidate)
+                else:
+                    preview.rows.append(candidate)
+                    staged.append({**candidate,'id':f"preview-{idx}"})
             elif kind=='assessments':
                 patient=_resolve_patient(row,patients)
                 if not patient:raise ValueError('Paciente não localizado por ID/e-mail/nome+nascimento')
@@ -125,16 +145,35 @@ def preview_import(kind,path,database):
 
 def apply_import(preview,database):
     imported=0
+    newly_skipped=0
     with database.transaction() as c:
         if preview.kind=='patients':
+            patients=[dict(x) for x in c.execute("SELECT * FROM pacientes")]
             for r in preview.rows:
-                cur=c.execute("INSERT INTO pacientes(nome,sexo,data_nascimento,telefone,email,observacoes,atualizado_em) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)",(r['nome'],r['sexo'],r['data_nascimento'],r['telefone'],r['email'],r['observacoes']));pid=cur.lastrowid
-                c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id,metadata_json) VALUES(?,?,?,?,?,?)",(pid,'paciente',date.today().isoformat(),'Paciente importado',pid,json.dumps({'source':preview.source_name},ensure_ascii=False)));imported+=1
+                existing=_resolve_patient(r,patients)
+                if existing:
+                    newly_skipped+=1
+                    continue
+                cur=c.execute("INSERT INTO pacientes(nome,sexo,data_nascimento,telefone,email,observacoes,atualizado_em) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)",(r['nome'],r['sexo'],r['data_nascimento'],r['telefone'],r['email'],r['observacoes']))
+                pid=cur.lastrowid
+                patients.append({**r,'id':pid})
+                c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id,metadata_json) VALUES(?,?,?,?,?,?)",(pid,'paciente',date.today().isoformat(),'Paciente importado',pid,json.dumps({'source':preview.source_name},ensure_ascii=False)))
+                imported+=1
         elif preview.kind=='assessments':
             for r in preview.rows:
-                data={k:v for k,v in r.items() if k not in {'_row'} and v is not None};cols=','.join(data);qs=','.join('?'*len(data));cur=c.execute(f"INSERT INTO avaliacoes({cols}) VALUES({qs})",tuple(data.values()));aid=cur.lastrowid
+                data={k:v for k,v in r.items() if k in {'paciente_id','data','peso','altura_cm','imc','pg_final','cintura'} and v is not None}
+                if not c.execute("SELECT 1 FROM pacientes WHERE id=?",(r['paciente_id'],)).fetchone():
+                    raise ValueError(f"Paciente #{r['paciente_id']} não encontrado na aplicação da importação")
+                # A repeat of the same measurement is not a new clinical event.
+                criteria=" AND ".join(f"{key} IS ?" for key in data)
+                if c.execute(f"SELECT id FROM avaliacoes WHERE {criteria} LIMIT 1",tuple(data.values())).fetchone():
+                    newly_skipped+=1
+                    continue
+                cols=','.join(data);qs=','.join('?'*len(data))
+                cur=c.execute(f"INSERT INTO avaliacoes({cols}) VALUES({qs})",tuple(data.values()));aid=cur.lastrowid
                 c.execute("INSERT INTO avaliacao_revisoes(avaliacao_id,versao,snapshot_json,motivo) VALUES(?,1,?,'importação')",(aid,json.dumps({**data,'id':aid},ensure_ascii=False,default=str)))
-                c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(r['paciente_id'],'avaliacao',r['data'],'Avaliação importada',aid));imported+=1
+                c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(r['paciente_id'],'avaliacao',r['data'],'Avaliação importada',aid))
+                imported+=1
         elif preview.kind=='labs':
             panel_cache={}
             for r in preview.rows:
@@ -142,17 +181,29 @@ def apply_import(preview,database):
                 panel_id=panel_cache.get(key)
                 if panel_id is None:
                     row=c.execute("SELECT id FROM lab_panels WHERE paciente_id=? AND data_coleta=? AND nome=? AND COALESCE(laboratorio,'')=? ORDER BY id DESC LIMIT 1",key).fetchone()
-                    if row:panel_id=row['id']
+                    if row:
+                        panel_id=row['id']
                     else:
-                        panel_id=c.execute("INSERT INTO lab_panels(paciente_id,nome,data_coleta,laboratorio) VALUES(?,?,?,?)",(r['paciente_id'],r['painel'],r['data_coleta'],r['laboratorio'])).lastrowid
+                        panel_id=c.execute("INSERT INTO lab_panels(paciente_id,nome,data_coleta,laboratorio) VALUES(?,?,?,?)",key).lastrowid
                         c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(r['paciente_id'],'laboratorio',r['data_coleta'],f"Exames - {r['painel']}",panel_id))
                     panel_cache[key]=panel_id
-                numeric=_num(r['valor']);text='' if numeric is not None else r['valor'];flag=''
+                numeric=_num(r['valor']);value_text='' if numeric is not None else r['valor']
+                previous=c.execute("""SELECT id FROM lab_results
+                    WHERE panel_id=? AND marker_name=? COLLATE NOCASE
+                    AND value_numeric IS ? AND value_text IS ? AND unit IS ?
+                    AND ref_min IS ? AND ref_max IS ? LIMIT 1""",
+                    (panel_id,r['marcador'],numeric,value_text,r['unidade'],r['ref_min'],r['ref_max'])).fetchone()
+                if previous:
+                    newly_skipped+=1
+                    continue
+                flag=''
                 if numeric is not None:
                     if r['ref_min'] is not None and numeric<r['ref_min']:flag='baixo'
                     elif r['ref_max'] is not None and numeric>r['ref_max']:flag='alto'
                     else:flag='normal'
-                c.execute("INSERT INTO lab_results(panel_id,marker_name,value_numeric,value_text,unit,ref_min,ref_max,flag) VALUES(?,?,?,?,?,?,?,?)",(panel_id,r['marcador'],numeric,text,r['unidade'],r['ref_min'],r['ref_max'],flag));imported+=1
+                c.execute("INSERT INTO lab_results(panel_id,marker_name,value_numeric,value_text,unit,ref_min,ref_max,flag) VALUES(?,?,?,?,?,?,?,?)",(panel_id,r['marcador'],numeric,value_text,r['unidade'],r['ref_min'],r['ref_max'],flag))
+                imported+=1
         else:raise ValueError('Tipo de importação não suportado')
-    ImportHistoryRepository(database).record(preview.kind,preview.source_name,preview.total_rows,imported,len(preview.skipped),len(preview.errors),{'errors':preview.errors[:100]})
-    return {'total':preview.total_rows,'imported':imported,'skipped':len(preview.skipped),'invalid':len(preview.errors)}
+    skipped=len(preview.skipped)+newly_skipped
+    ImportHistoryRepository(database).record(preview.kind,preview.source_name,preview.total_rows,imported,skipped,len(preview.errors),{'errors':preview.errors[:100]})
+    return {'total':preview.total_rows,'imported':imported,'skipped':skipped,'invalid':len(preview.errors)}
