@@ -318,7 +318,10 @@ class RefinedPatientDialog(CorePatientDialog):
         p = self.pr.get(self.pid)
         assessments = self.ar.list(self.pid)
         latest = assessments[-1] if assessments else None
+        measurement = self.ar.latest_body_measurement(self.pid)
+        measurement_origin = measurement["origem"] if measurement else "Sem avaliação"
         plans = self.pl.list(self.pid)
+        active_plan = next((plan for plan in plans if plan["status"] == "Ativo"), None)
         timeline = self.tr.list(self.pid)
 
         grid = QGridLayout()
@@ -326,8 +329,8 @@ class RefinedPatientDialog(CorePatientDialog):
         grid.addWidget(
             StatCard(
                 "Peso",
-                f"{latest['peso']:.1f} kg" if latest and latest["peso"] is not None else "—",
-                "Última avaliação",
+                f"{measurement['peso']:.1f} kg" if measurement and measurement["peso"] is not None else "—",
+                measurement_origin,
             ),
             0,
             0,
@@ -335,8 +338,8 @@ class RefinedPatientDialog(CorePatientDialog):
         grid.addWidget(
             StatCard(
                 "IMC",
-                f"{latest['imc']:.1f}" if latest and latest["imc"] is not None else "—",
-                "Última avaliação",
+                f"{measurement['imc']:.1f}" if measurement and measurement["imc"] is not None else "—",
+                measurement_origin,
             ),
             0,
             1,
@@ -351,7 +354,7 @@ class RefinedPatientDialog(CorePatientDialog):
             2,
         )
         grid.addWidget(
-            StatCard("Plano atual", plans[0]["nome"] if plans else "Nenhum", "Plano alimentar"),
+            StatCard("Plano atual", active_plan["nome"] if active_plan else "Nenhum", "Plano alimentar"),
             0,
             3,
         )
