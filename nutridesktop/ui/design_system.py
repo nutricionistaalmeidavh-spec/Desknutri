@@ -59,7 +59,7 @@ class ThemeSelector(Card):
     def __init__(self,current,on_change,parent=None):
         super().__init__(parent,soft=True);self.group=QButtonGroup(self);self.group.setExclusive(True)
         self.body.addWidget(section_title('Aparência'))
-        self.body.addWidget(muted('Escolha o tema da interface. O tema escuro profissional é o padrão do NutriDesk.'))
+        self.body.addWidget(muted('O tema rosé é o padrão do NutriDesk. O tema escuro profissional continua disponível.'))
         for key,theme in THEMES.items():
             b=QPushButton(theme.label);b.setCheckable(True);b.setChecked(key==current);b.setProperty('primary',key==current)
             b.clicked.connect(lambda checked=False,k=key:on_change(k) if checked else None);self.group.addButton(b);self.body.addWidget(b)
