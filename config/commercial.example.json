@@ -1,7 +1,6 @@
 {
-  "purchase_url": "https://nutridesk-sfdln8.v2.appdeploy.ai/",
+  "purchase_url": "https://github.com/nutricionistaalmeidavh-spec/Desknutri/releases/latest",
   "whatsapp": "",
   "support_message": "Olá! Preciso de suporte com o NutriDesk.",
-  "publisher": "NutriDesk",
-  "license_server_url": "https://ozxpwbhqqatfntbudwyg.supabase.co/functions/v1/nutridesk-licensing"
+  "publisher": "NutriDesk"
 }
