@@ -307,12 +307,15 @@ class UpdateService:
         data = json.loads(PENDING_FILE.read_text(encoding="utf-8"))
         if data.get("to_version") != APP_VERSION:
             return None
-        with closing(self.db.connect()) as conn:
-            if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                raise RuntimeError(
-                    "Falha na integridade do banco após atualizar. "
-                    f"Preserve os dados e utilize o backup: {data.get('backup_path')}"
-                )
+        try:
+            with closing(self.db.connect()) as conn:
+                if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise RuntimeError("Falha de integridade detectada no banco clínico.")
+        except (sqlite3.DatabaseError, RuntimeError) as exc:
+            raise RuntimeError(
+                "Falha de integridade do banco após atualizar. "
+                f"Preserve os dados e utilize o backup: {data.get('backup_path')}"
+            ) from exc
         result = {
             "status": "healthy",
             "from_version": data.get("from_version"),
