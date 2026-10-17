@@ -1,3 +1,11 @@
+# NutriDesktop 6.5.0 — Execução local sem bloqueio comercial
+
+- Remove a exigência de e-mail liberado, conta, senha comercial e validação de licença antes da abertura.
+- Remove as opções "Conta" e de ativação da interface utilizada pelo aplicativo.
+- Configuração padrão distribuída não aponta para o serviço antigo de licenciamento nem para o AppDeploy.
+- Preserva PIN local opcional, dados e prontuários SQLite, backup, PDF, exportações e atualização opcional via GitHub.
+- Mantém o mesmo identificador de instalação, pasta de dados e SCHEMA_VERSION 13; sem migração destrutiva.
+
 # NutriDesktop 6.4.0 — Identidade rosé e comparação corporal restauradas
 
 - Restaura como padrão a identidade clínica clara em vinho/rosé usada no design aprovado: fundo off-white, superfícies brancas, navegação clara e ações em rosé.
