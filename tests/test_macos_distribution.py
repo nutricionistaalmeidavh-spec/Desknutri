@@ -15,7 +15,7 @@ def test_installer_filename_uses_native_package_for_each_platform():
     assert installer_filename("6.5.2", system="Windows") == "NutriDesktop-Setup-6.5.2.exe"
     assert installer_filename("6.5.2", system="Darwin", architecture="arm64") == "NutriDesk-6.5.2-macos-arm64.dmg"
     assert installer_filename("6.5.2", system="Darwin", architecture="x86_64") == "NutriDesk-6.5.2-macos-x86_64.dmg"
-    with pytest.raises(RuntimeError, match="arquitetura"):
+    with pytest.raises(RuntimeError, match="Arquitetura"):
         installer_filename("6.5.2", system="Darwin", architecture="mips")
     with pytest.raises(RuntimeError, match="suportado"):
         installer_filename("6.5.2", system="Linux")
