@@ -91,6 +91,11 @@ class GitHubReleaseUpdateMixin:
                 if hasattr(self, name):
                     getattr(self, name).setEnabled(True)
             worker.deleteLater()
+            if getattr(self, "_close_after_updater", False):
+                self._close_after_updater = False
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, QApplication.quit)
+                return
             if getattr(self, "_auto_install_pending", False):
                 self._auto_install_pending = False
                 from PySide6.QtCore import QTimer
@@ -173,7 +178,8 @@ class GitHubReleaseUpdateMixin:
             except Exception as exc:
                 show_error(self, "Atualização", exc)
                 return
-            QApplication.quit()
+            # Wait for QThread.finished before quitting: avoids destroying an active thread.
+            self._close_after_updater = True
 
         self._start_update_worker(
             lambda progress: self.update_service.stage(info, progress=progress), staged
