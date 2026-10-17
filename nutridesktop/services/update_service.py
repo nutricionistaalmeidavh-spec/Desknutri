@@ -3,12 +3,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
+import sys
 import urllib.request
+from contextlib import closing
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
-from nutridesktop.core.paths import UPDATE_DIR
+from nutridesktop.core.paths import BACKUP_DIR, UPDATE_DIR
 from nutridesktop.data.database import Database, db
 from nutridesktop.version import APP_VERSION, RELEASE_CHANNEL
 from .app_settings import AppSettings
@@ -19,7 +23,35 @@ DEFAULT_RELEASE_API = (
 LEGACY_MANIFEST_SUFFIX = "/releases/latest/download/version.json"
 CHECKSUM_ASSET = "SHA256SUMS.txt"
 RESULT_FILE = UPDATE_DIR / "last_update_result.json"
+PENDING_FILE = UPDATE_DIR / "pending_update.json"
 
+
+
+_INSTALL_HELPER_SCRIPT = r"""
+param(
+    [Parameter(Mandatory=$true)][int]$ParentPid,
+    [Parameter(Mandatory=$true)][string]$Installer,
+    [Parameter(Mandatory=$true)][string]$Executable,
+    [Parameter(Mandatory=$true)][string]$LogPath
+)
+$ErrorActionPreference = 'Stop'
+try { Wait-Process -Id $ParentPid -ErrorAction SilentlyContinue } catch {}
+try {
+    $proc = Start-Process -FilePath $Installer -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' -Verb RunAs -PassThru -Wait
+    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+        throw "Instalador terminou com código $($proc.ExitCode)"
+    }
+    Add-Content -LiteralPath $LogPath -Value "Instalação concluída: $($proc.ExitCode)"
+} catch {
+    Add-Content -LiteralPath $LogPath -Value "Falha na instalação: $($_.Exception.Message)"
+}
+# In case of installer error, reopen the previous executable for assisted recovery.
+if (Test-Path -LiteralPath $Executable) {
+    try { Start-Process -FilePath $Executable } catch {
+        Add-Content -LiteralPath $LogPath -Value "Falha ao reabrir: $($_.Exception.Message)"
+    }
+}
+"""
 
 @dataclass(frozen=True)
 class UpdateInfo:
@@ -175,31 +207,123 @@ class UpdateService:
             release_url=release.get("html_url") or "",
         )
 
-    def _download(self, url: str, dest: Path, expected: str):
+    def _download(self, url: str, dest: Path, expected: str, progress=None):
+        """Download in chunks; publish EXE only after SHA-256 verification."""
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(_read_url(url))
-        actual = sha256_file(dest)
-        if actual.lower() != expected.lower():
-            dest.unlink(missing_ok=True)
-            raise ValueError("SHA-256 do instalador não confere com a Release do GitHub")
-        return dest
+        partial = dest.with_name(dest.name + ".part")
+        partial.unlink(missing_ok=True)
+        source = Path(url)
+        response = source.open("rb") if source.is_file() else urllib.request.urlopen(_request(url), timeout=30)
+        digest = hashlib.sha256()
+        downloaded = 0
+        try:
+            with response, partial.open("wb") as target:
+                size = int(getattr(response, "headers", {}).get("Content-Length", 0) or 0)
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    target.write(chunk)
+                    digest.update(chunk)
+                    downloaded += len(chunk)
+                    if progress and size:
+                        progress(min(99, int(downloaded * 100 / size)))
+            if digest.hexdigest().lower() != expected.lower():
+                raise ValueError("SHA-256 do instalador não confere com a Release do GitHub")
+            os.replace(partial, dest)
+            if progress:
+                progress(100)
+            return dest
+        except Exception:
+            partial.unlink(missing_ok=True)
+            raise
 
-    def stage(self, info: UpdateInfo):
+    def backup_before_update(self, info: UpdateInfo, directory: Path = BACKUP_DIR) -> Path:
+        """Consistent SQLite snapshot including the WAL; original data is untouched."""
+        directory.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+        backup = directory / f"nutridesk-preupdate-{APP_VERSION}-to-{info.version}-{stamp}.db"
+        try:
+            with closing(self.db.connect()) as original, closing(sqlite3.connect(backup)) as target:
+                original.backup(target)
+            with closing(sqlite3.connect(backup)) as verify:
+                if verify.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise RuntimeError("Backup clínico falhou na verificação de integridade")
+            return backup
+        except Exception:
+            backup.unlink(missing_ok=True)
+            raise
+
+    def stage(self, info: UpdateInfo, progress=None):
         installer = self._download(
             info.installer_url,
             UPDATE_DIR / f"NutriDesktop-Setup-{info.version}.exe",
             info.sha256,
+            progress=progress,
         )
-        # Segundo item mantido para compatibilidade com a chamada P3 anterior.
-        return installer, None
+        backup = self.backup_before_update(info)
+        return installer, backup
 
     def launch_staged(self, info: UpdateInfo, installer: Path, rollback_installer=None):
         if os.name != "nt":
-            raise RuntimeError("O instalador automático está disponível no Windows.")
-        # Instalação propositalmente interativa: o usuário controla e confirma o processo.
-        subprocess.Popen([str(installer)], close_fds=True)
+            raise RuntimeError("A instalação integrada está disponível no Windows.")
+        installer = Path(installer)
+        if not installer.is_file() or sha256_file(installer).lower() != info.sha256.lower():
+            raise RuntimeError("Instalador ausente ou alterado após a validação SHA-256.")
+        backup = Path(rollback_installer) if rollback_installer else None
+        if not backup or not backup.is_file():
+            raise RuntimeError("Backup clínico pré-atualização não encontrado. Operação cancelada.")
+        if not getattr(sys, "frozen", False):
+            raise RuntimeError("Instalação integrada disponível apenas no executável empacotado.")
+
+        script = UPDATE_DIR / "install-update.ps1"
+        script.write_text(_INSTALL_HELPER_SCRIPT, encoding="utf-8-sig")
+        PENDING_FILE.write_text(json.dumps({
+            "from_version": APP_VERSION,
+            "to_version": info.version,
+            "backup_path": str(backup),
+            "installer": str(installer),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }, ensure_ascii=False), encoding="utf-8")
+        try:
+            subprocess.Popen(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+                 "-ExecutionPolicy", "Bypass", "-File", str(script),
+                 "-ParentPid", str(os.getpid()), "-Installer", str(installer),
+                 "-Executable", sys.executable, "-LogPath", str(UPDATE_DIR / "install-update.log")],
+                close_fds=True,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
+            )
+        except Exception:
+            PENDING_FILE.unlink(missing_ok=True)
+            raise
         self._record_history(APP_VERSION, info.version, "installer_started", info.release_url)
         return True
+
+    def complete_pending_update(self):
+        """On the next launch, confirm target version and clinic database integrity."""
+        if not PENDING_FILE.is_file():
+            return None
+        data = json.loads(PENDING_FILE.read_text(encoding="utf-8"))
+        if data.get("to_version") != APP_VERSION:
+            return None
+        with closing(self.db.connect()) as conn:
+            if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise RuntimeError(
+                    "Falha na integridade do banco após atualizar. "
+                    f"Preserve os dados e utilize o backup: {data.get('backup_path')}"
+                )
+        result = {
+            "status": "healthy",
+            "from_version": data.get("from_version"),
+            "to_version": APP_VERSION,
+            "backup_path": data.get("backup_path"),
+        }
+        RESULT_FILE.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+        self._record_history(data.get("from_version") or "", APP_VERSION,
+                             "healthy", "Verificação SQLite pós-instalação concluída")
+        PENDING_FILE.unlink(missing_ok=True)
+        return result
 
     def _record_history(self, from_version: str, to_version: str, status: str, details: str = ""):
         with self.db.transaction() as c:
