@@ -91,6 +91,10 @@ class GitHubReleaseUpdateMixin:
                 if hasattr(self, name):
                     getattr(self, name).setEnabled(True)
             worker.deleteLater()
+            if getattr(self, "_auto_install_pending", False):
+                self._auto_install_pending = False
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, lambda: self.install_update(skip_confirmation=True))
 
         def failed(message):
             self._update_status("Falha na atualização: " + message)
@@ -126,9 +130,8 @@ class GitHubReleaseUpdateMixin:
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
                 )
                 if answer == QMessageBox.Yes:
-                    # Worker cleanup runs when finished, so queue the next step.
-                    from PySide6.QtCore import QTimer
-                    QTimer.singleShot(0, self.install_update)
+                    # Start only after the finished signal releases the worker.
+                    self._auto_install_pending = True
 
         self._start_update_worker(
             lambda progress: self.update_service.check(), checked, silent=bool(silent)
@@ -138,7 +141,7 @@ class GitHubReleaseUpdateMixin:
         if self.update_service.auto_check():
             self.check_updates(silent=True)
 
-    def install_update(self):
+    def install_update(self, skip_confirmation=False):
         if getattr(self, "_update_worker", None) is not None:
             return
         info = self.pending_update
@@ -148,16 +151,17 @@ class GitHubReleaseUpdateMixin:
         if os.name != "nt":
             QMessageBox.information(self, "Atualizações", "A instalação integrada exige Windows.")
             return
-        answer = QMessageBox.question(
-            self, "Instalar atualização",
-            f"Atualizar para NutriDesk {info.version}?\n\n"
-            "O sistema fará backup do banco clínico antes de fechar, "
-            "instalar e reabrir automaticamente. "
-            "O Windows poderá solicitar permissão de administrador.",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-        )
-        if answer != QMessageBox.Yes:
-            return
+        if not skip_confirmation:
+            answer = QMessageBox.question(
+                self, "Instalar atualização",
+                f"Atualizar para NutriDesk {info.version}?\n\n"
+                "O sistema fará backup do banco clínico antes de fechar, "
+                "instalar e reabrir automaticamente. "
+                "O Windows poderá solicitar permissão de administrador.",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                return
         self._update_status("Baixando e validando a atualização. Os dados clínicos não serão alterados.")
         self._update_progress(0)
 
