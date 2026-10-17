@@ -218,6 +218,7 @@ QFrame#softCard {{ background: {t.surface_alt}; border: 1px solid {t.border}; bo
 QFrame#comparisonCard {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: 10px; }}
 QLabel#pageTitle {{ font-size: 25px; font-weight: 800; color: {t.text}; }}
 QLabel#pageSubtitle, QLabel#muted {{ color: {t.text_muted}; }}
+QLabel#agendaFilterFeedback {{ background: {t.danger_soft}; color: {t.danger}; border: 1px solid {t.danger}; border-radius: 6px; padding: 7px 10px; }}
 QLabel#metricLabel {{ color: {t.text_secondary}; font-weight: 600; }}
 QLabel#metricValue {{ color: {t.text}; font-size: 24px; font-weight: 800; }}
 QLabel#comparisonValue {{ color: {t.text}; font-size: 15px; font-weight: 800; }}

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QStackedWidget,
     QTableWidget,
     QTextEdit,
@@ -64,6 +65,11 @@ class UiRefinementMixin:
         "configurações": "Configurações",
         "configuracoes": "Configurações",
         "backup": "Configurações",
+        "atualizações": "Atualizações",
+        "atualizacoes": "Atualizações",
+        "exportações": "Exportações",
+        "exportacoes": "Exportações",
+        "suporte": "Suporte",
     }
 
     # ------------------------------------------------------------------ shell
@@ -355,6 +361,7 @@ class UiRefinementMixin:
         )
         toolbar = TableToolbar("Buscar paciente por nome")
         self.patient_search = toolbar.search
+        self.patient_search.setAccessibleName("Buscar paciente por nome")
         self.patient_search.textChanged.connect(self.refresh_patients)
         toolbar.add_action(button("Novo paciente", self.new_patient, variant="secondary"))
         toolbar.add_action(button("Nova consulta", self.new_consultation, variant="primary"))
@@ -365,18 +372,24 @@ class UiRefinementMixin:
         self.patient_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.patient_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.patient_table.setAlternatingRowColors(True)
+        self.patient_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.patient_table.setAccessibleName("Lista de pacientes")
         self.patient_table.verticalHeader().setVisible(False)
         header = self.patient_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         for column in (2, 3, 4):
             header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
-        self.patient_table.cellDoubleClicked.connect(lambda *_: self.open_patient())
+        # itemActivated cobre duplo clique e a tecla Enter sem iniciar edição fictícia.
+        self.patient_table.itemActivated.connect(lambda *_: self.open_patient())
+        self.patient_count = QLabel("")
+        self.patient_count.setObjectName("muted")
+        v.addWidget(self.patient_count)
         v.addWidget(self.patient_table, 1)
 
         self.patient_empty = EmptyState(
-            "Nenhum paciente encontrado",
-            "Cadastre um novo paciente ou ajuste a busca.",
+            "Nenhum paciente cadastrado",
+            "Cadastre o primeiro paciente para iniciar os atendimentos.",
         )
         v.addWidget(self.patient_empty)
         footer = QHBoxLayout()
@@ -388,7 +401,7 @@ class UiRefinementMixin:
         )
         self.open_patient_button.setEnabled(False)
         self.patient_table.itemSelectionChanged.connect(
-            lambda: self.open_patient_button.setEnabled(self.patient_table.currentRow() >= 0)
+            lambda: self.open_patient_button.setEnabled(self._has_patient_selection())
         )
         footer.addWidget(self.open_patient_button)
         v.addLayout(footer)
@@ -396,17 +409,46 @@ class UiRefinementMixin:
         return w
 
     def refresh_patients(self):
+        if hasattr(self, "patient_table"):
+            # Uma busca/atualização nunca deve herdar a seleção de outro paciente.
+            self.patient_table.clearSelection()
         super().refresh_patients()
-        if hasattr(self, "open_patient_button"):
-            self.open_patient_button.setEnabled(self.patient_table.currentRow() >= 0)
-
-    def open_patient(self):
         if not hasattr(self, "patient_table"):
             return
+        count = self.patient_table.rowCount()
+        query = self.patient_search.text().strip() if hasattr(self, "patient_search") else ""
+        if hasattr(self, "patient_count"):
+            self.patient_count.setText(
+                f"{count} {'paciente encontrado' if count == 1 else 'pacientes encontrados'}"
+                if query else f"{count} {'paciente cadastrado' if count == 1 else 'pacientes cadastrados'}"
+            )
+        if hasattr(self, "patient_empty"):
+            if query:
+                self.patient_empty.set_content(
+                    "Nenhum resultado para a busca",
+                    "Verifique o nome ou limpe a busca para ver todos os pacientes.",
+                )
+            else:
+                self.patient_empty.set_content(
+                    "Nenhum paciente cadastrado",
+                    "Cadastre o primeiro paciente para iniciar os atendimentos.",
+                )
+        if hasattr(self, "open_patient_button"):
+            self.open_patient_button.setEnabled(self._has_patient_selection())
+
+    def _has_patient_selection(self):
+        return (
+            hasattr(self, "patient_table")
+            and bool(self.patient_table.selectedItems())
+            and self.patient_table.item(self.patient_table.currentRow(), 0) is not None
+        )
+
+    def open_patient(self):
+        if not self._has_patient_selection():
+            return
         row = self.patient_table.currentRow()
-        if row >= 0:
-            self._open_patient_id(int(self.patient_table.item(row, 0).text()))
-            self.refresh_patients()
+        self._open_patient_id(int(self.patient_table.item(row, 0).text()))
+        self.refresh_patients()
 
     def _open_patient_id(self, patient_id):
         from .refined_patient_dialog import RefinedPatientDialog
@@ -464,12 +506,19 @@ class UiRefinementMixin:
         filter_layout.addWidget(button("Filtrar", self.refresh_agenda, variant="secondary"))
         filter_layout.addWidget(button("Agendar", self.new_appointment, variant="primary"))
         right.addWidget(filters)
+        self.agenda_feedback = QLabel("")
+        self.agenda_feedback.setObjectName("agendaFilterFeedback")
+        self.agenda_feedback.setWordWrap(True)
+        self.agenda_feedback.setVisible(False)
+        right.addWidget(self.agenda_feedback)
 
         self.ag_table = QTableWidget(0, 7)
         self.ag_table.setHorizontalHeaderLabels(["ID", "Data", "Hora", "Paciente", "Tipo", "Status", "Duração"])
         self.ag_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.ag_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.ag_table.setAlternatingRowColors(True)
+        self.ag_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.ag_table.setAccessibleName("Consultas da agenda")
         self.ag_table.verticalHeader().setVisible(False)
         ag_header = self.ag_table.horizontalHeader()
         ag_header.setSectionResizeMode(QHeaderView.ResizeToContents)
@@ -481,19 +530,25 @@ class UiRefinementMixin:
             "Selecione outra data ou agende uma nova consulta.",
         )
         right.addWidget(self.agenda_empty)
+        self.agenda_selection_hint = QLabel("Selecione uma consulta para alterar o status.")
+        self.agenda_selection_hint.setObjectName("muted")
+        right.addWidget(self.agenda_selection_hint)
         actions = QHBoxLayout()
+        self.agenda_status_buttons = {}
         for status in ["Realizada", "Faltou", "Cancelada", "Remarcada"]:
-            actions.addWidget(
-                button(
-                    status,
-                    lambda checked=False, current=status: self.set_appointment_status(current),
-                    variant="secondary",
-                    compact=True,
-                    tone=status_tone(status),
-                )
+            action = button(
+                status,
+                lambda checked=False, current=status: self.set_appointment_status(current),
+                variant="secondary",
+                compact=True,
+                tone=status_tone(status),
             )
+            action.setEnabled(False)
+            actions.addWidget(action)
+            self.agenda_status_buttons[status] = action
         actions.addStretch()
         right.addLayout(actions)
+        self.ag_table.itemSelectionChanged.connect(self._update_agenda_actions)
         split.addLayout(right, 3)
         v.addLayout(split, 1)
         self.refresh_agenda()
@@ -516,14 +571,23 @@ class UiRefinementMixin:
         start = self._agenda_filter_date(self.ag_start)
         end = self._agenda_filter_date(self.ag_end)
         status = None if self.ag_status.currentText() == "Todos" else self.ag_status.currentText()
-        try:
-            rows = self.ag.list(start, end, status)
-        except Exception:
-            return
+        rows = []
+        error = ""
+        if end < start:
+            error = "A data final deve ser igual ou posterior à data inicial."
+        else:
+            try:
+                rows = self.ag.list(start, end, status)
+            except Exception:
+                error = "Não foi possível carregar a agenda. Tente filtrar novamente."
+        # Impede que uma seleção antiga altere outra consulta após mudar filtros.
+        self.ag_table.clearSelection()
         self.ag_table.setRowCount(len(rows))
         self.ag_table.setVisible(bool(rows))
+        self.agenda_feedback.setText(error)
+        self.agenda_feedback.setVisible(bool(error))
         if hasattr(self, "agenda_empty"):
-            self.agenda_empty.setVisible(not bool(rows))
+            self.agenda_empty.setVisible(not rows and not error)
         for row_index, appointment in enumerate(rows):
             values = [
                 appointment["id"],
@@ -537,6 +601,49 @@ class UiRefinementMixin:
             for column, value in enumerate(values):
                 self.ag_table.setItem(row_index, column, item(value))
             self.ag_table.setCellWidget(row_index, 5, StatusBadge(appointment["status"]))
+        self._update_agenda_actions()
+
+    def _has_agenda_selection(self):
+        return (
+            hasattr(self, "ag_table")
+            and bool(self.ag_table.selectedItems())
+            and self.ag_table.item(self.ag_table.currentRow(), 0) is not None
+        )
+
+    def _update_agenda_actions(self):
+        if not hasattr(self, "agenda_status_buttons"):
+            return
+        selected = self._has_agenda_selection()
+        for action in self.agenda_status_buttons.values():
+            action.setEnabled(selected)
+        if selected:
+            row = self.ag_table.currentRow()
+            patient = self.ag_table.item(row, 3)
+            self.agenda_selection_hint.setText(
+                f"Consulta selecionada: {patient.text() if patient else 'paciente'}."
+            )
+        else:
+            self.agenda_selection_hint.setText("Selecione uma consulta para alterar o status.")
+
+    def set_appointment_status(self, status):
+        if not self._has_agenda_selection():
+            return
+        if status in {"Cancelada", "Faltou"}:
+            row = self.ag_table.currentRow()
+            patient = self.ag_table.item(row, 3)
+            name = patient.text() if patient else "esta consulta"
+            choice = QMessageBox.question(
+                self,
+                "Confirmar status da consulta",
+                f"Marcar a consulta de {name} como {status.lower()}?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if choice != QMessageBox.Yes:
+                return
+        result = super().set_appointment_status(status)
+        self._set_search_feedback(f"Consulta marcada como {status.lower()}.")
+        return result
 
     @staticmethod
     def _agenda_filter_date(widget) -> str:
