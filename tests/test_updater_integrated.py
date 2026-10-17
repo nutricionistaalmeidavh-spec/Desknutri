@@ -96,10 +96,10 @@ def test_healthcheck_failure_preserves_recovery_marker(service, tmp_path, monkey
     }), encoding="utf-8")
     monkeypatch.setattr(updater, "PENDING_FILE", pending)
     monkeypatch.setattr(updater, "RESULT_FILE", tmp_path / "result.json")
-    with service.db.connect() as conn:
-        conn.execute("PRAGMA writable_schema=ON")
-        conn.execute("UPDATE sqlite_master SET sql='BROKEN' WHERE name='pacientes'")
-        conn.execute("PRAGMA writable_schema=OFF")
+    # Simulate a damaged database without corrupting patient fixtures in-place.
+    broken = tmp_path / "corrupt.db"
+    broken.write_bytes(b"this is not an SQLite database")
+    service.db.path = broken
     with pytest.raises(RuntimeError, match="integridade"):
         service.complete_pending_update()
     assert pending.exists()
