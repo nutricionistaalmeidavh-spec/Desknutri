@@ -22,10 +22,24 @@ class StatCard(Card):
             d=QLabel(str(detail));d.setObjectName('muted');self.body.addWidget(d)
 
 class EmptyState(Card):
+    """Estado vazio com mensagem contextual, sem recriar o widget."""
     def __init__(self,title,message='',parent=None):
-        super().__init__(parent);t=QLabel(title);t.setAlignment(Qt.AlignCenter);t.setStyleSheet('font-size:16px;font-weight:700');self.body.addWidget(t)
-        if message:
-            m=QLabel(message);m.setObjectName('muted');m.setWordWrap(True);m.setAlignment(Qt.AlignCenter);self.body.addWidget(m)
+        super().__init__(parent)
+        self.title_label=QLabel(title)
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setStyleSheet('font-size:16px;font-weight:700')
+        self.body.addWidget(self.title_label)
+        self.message_label=QLabel(message)
+        self.message_label.setObjectName('muted')
+        self.message_label.setWordWrap(True)
+        self.message_label.setAlignment(Qt.AlignCenter)
+        self.message_label.setVisible(bool(message))
+        self.body.addWidget(self.message_label)
+
+    def set_content(self,title,message=''):
+        self.title_label.setText(title)
+        self.message_label.setText(message)
+        self.message_label.setVisible(bool(message))
 
 
 class LoadingState(Card):
