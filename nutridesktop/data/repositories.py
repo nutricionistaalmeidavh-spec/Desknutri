@@ -39,6 +39,7 @@ class AssessmentRepository(BaseRepo):
         with self.db.transaction() as c:
             cur=c.execute(f"INSERT INTO avaliacoes({cols}) VALUES({qs})",tuple(data.values())); aid=cur.lastrowid
             self._snapshot(c,aid,"criação")
+            c.execute("UPDATE manual_pending_actions SET resolved_at=CURRENT_TIMESTAMP WHERE paciente_id=? AND kind='reassess_after_consultation' AND resolved_at IS NULL",(pid,))
             c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(pid,"avaliacao",data.get("data") or date.today().isoformat(),"Avaliação nutricional",aid)); return aid
     def update_versioned(self,aid,changes,motivo="Correção clínica"):
         with self.db.transaction() as c:
@@ -99,6 +100,7 @@ class PlanRepository(BaseRepo):
                 ver=c.execute("SELECT COALESCE(MAX(version_no),0)+1 FROM planos WHERE id=? OR parent_plan_id=?",(parent_plan_id,parent_plan_id)).fetchone()[0]
                 c.execute("UPDATE planos SET status='Histórico' WHERE id=? OR parent_plan_id=?",(parent_plan_id,parent_plan_id))
             cur=c.execute("INSERT INTO planos(paciente_id,nome,data,vet_meta,observacoes,parent_plan_id,version_no,status) VALUES(?,?,?,?,?,?,?,'Ativo')",(pid,nome,date.today().isoformat(),vet_meta,obs,parent_plan_id,ver)); plan=cur.lastrowid
+            c.execute("UPDATE manual_pending_actions SET resolved_at=CURRENT_TIMESTAMP WHERE paciente_id=? AND kind='plan_update_after_consultation' AND resolved_at IS NULL",(pid,))
             c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(pid,"plano",date.today().isoformat(),f"Plano alimentar v{ver}",plan)); return plan
     def add_food(self,plan_id,meal,food_id,grams):
         with self.db.transaction() as c:c.execute("INSERT INTO plano_itens(plano_id,refeicao,alimento_id,quantidade_g) VALUES(?,?,?,?)",(plan_id,meal,food_id,grams)); self._snapshot(c,plan_id)
@@ -124,6 +126,7 @@ class PlanRepository(BaseRepo):
                 if mapped:c.execute("INSERT INTO plano_substituicoes(plano_id,plano_item_id,alternative_food_id,quantidade_g,note) VALUES(?,?,?,?,?)",(new,mapped,sub['alternative_food_id'],sub['quantidade_g'],sub['note']))
             c.execute("INSERT INTO plano_metas(plano_id,nutriente,meta,unidade,limite_min,limite_max) SELECT ?,nutriente,meta,unidade,limite_min,limite_max FROM plano_metas WHERE plano_id=?",(new,plan_id))
             c.execute("INSERT INTO refeicao_metas(plano_id,refeicao,percentual_vet) SELECT ?,refeicao,percentual_vet FROM refeicao_metas WHERE plano_id=?",(new,plan_id))
+            c.execute("UPDATE manual_pending_actions SET resolved_at=CURRENT_TIMESTAMP WHERE paciente_id=? AND kind='plan_update_after_consultation' AND resolved_at IS NULL",(old['paciente_id'],))
             c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id) VALUES(?,?,?,?,?)",(old['paciente_id'],'plano',date.today().isoformat(),f'Plano alimentar v{ver}',new));return new
     def list(self,pid):
         with self.db.connect() as c:return c.execute("SELECT * FROM planos WHERE paciente_id=? ORDER BY CASE WHEN status='Ativo' THEN 0 ELSE 1 END,id DESC",(pid,)).fetchall()
