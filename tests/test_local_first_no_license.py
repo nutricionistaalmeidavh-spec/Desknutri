@@ -39,6 +39,6 @@ def test_optional_pin_remains_available(tmp_path):
     assert security.verify("1234")
     assert not security.verify("0000")
 
-def test_schema_unchanged():
-    assert APP_VERSION == "6.5.0"
-    assert SCHEMA_VERSION == 13
+def test_local_first_survives_schema_upgrade():
+    assert APP_VERSION == "6.5.1"
+    assert SCHEMA_VERSION == 14
