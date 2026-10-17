@@ -78,7 +78,8 @@ def test_mac_dmg_opens_after_backup_and_keeps_app_running(tmp_path, monkeypatch)
     monkeypatch.setattr(updater, "PENDING_FILE", pending)
     called = []
     monkeypatch.setattr(updater.subprocess, "Popen", lambda command, **_: called.append(command))
-    dmg = tmp_path / "new.dmg"
+    monkeypatch.setattr(updater.platform, "machine", lambda: "arm64")
+    dmg = tmp_path / "NutriDesk-99.1.0-macos-arm64.dmg"
     dmg.write_bytes(b"test-dmg")
     backup = tmp_path / "clinical.db"
     backup.write_bytes(b"backup")
