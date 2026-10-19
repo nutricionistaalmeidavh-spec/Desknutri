@@ -39,10 +39,10 @@ def test_view_models_calculate_age_and_group_navigation():
     assert vm.age_on('2000-08-23',date(2026,8,22))==25
     assert vm.age_on('2000-08-22',date(2026,8,22))==26
     groups=vm.NAV_GROUPS
-    assert list(groups)==['TRABALHO','CONTEÚDO','SISTEMA']
+    assert list(groups)==['TRABALHO','CLÍNICA','CONTEÚDO','SISTEMA']
     assert groups['TRABALHO'][:3]==['Dashboard','Pacientes','Agenda']
     assert 'Crescimento WHO' not in sum(groups.values(),[])
-    assert 'Materno-infantil' not in sum(groups.values(),[])
+    assert 'Materno-infantil' in sum(groups.values(),[])
 
 
 def test_friendly_error_hides_raw_network_details():
