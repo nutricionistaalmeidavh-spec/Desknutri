@@ -16,7 +16,8 @@ from nutridesktop.data.repositories import (
     PlanRepository, AgendaRepository, FoodRepository,
 )
 from nutridesktop.services.app_settings import AppSettings
-from nutridesktop.services.reports import _identity
+from nutridesktop.services.reports import _identity, generate_complete_report, generate_from_template
+from nutridesktop.services.plan_documents import generate_plan_pdf
 from nutridesktop.ui.main_window import MainWindow
 from nutridesktop.ui.refined_patient_dialog import RefinedPatientDialog
 
@@ -72,6 +73,28 @@ for i, (name, sex, birth, note) in enumerate(personas):
         check(f"Avaliação {name} #{j+1}", lambda pid=pid,payload=payload: assessments.create(pid,payload))
     check(f"Plano {name}", lambda pid=pid,name=name: plans.create(pid,"Plano QA - "+name, 2000, "Cinco refeições; metas individualizadas em consulta"))
     check(f"Consulta {name}", lambda pid=pid,note=note: agenda.create(pid,(date.today()+timedelta(days=3)).isoformat(),"09:30","Retorno",note))
+    def edit_and_verify(pid=pid):
+        patients.update(pid, observacoes="Retorno: plano revisado e evolução avaliada")
+        require("plano revisado" in patients.get(pid)["observacoes"], "Edição não persistiu")
+        current = assessments.list(pid)[-1]
+        assessments.update_versioned(current["id"], {"peso": float(current["peso"])+0.2}, "Reavaliação QA")
+        require(len(assessments.revisions(current["id"])) >= 2, "Histórico de revisão ausente")
+        new_plan = plans.create_revision(plans.list(pid)[0]["id"], "Plano QA revisado")
+        require(plans.list(pid)[0]["id"] == new_plan, "Revisão do plano não persistiu")
+    check(f"Edição e versionamento {name}", edit_and_verify)
+    def export_and_verify(pid=pid):
+        folder=OUT/"pdfs"
+        folder.mkdir(exist_ok=True)
+        for label,fn in (
+            ("relatorio",lambda path:generate_complete_report(pid,path,database=db)),
+            ("plano",lambda path:generate_plan_pdf(pid,plans.list(pid)[0]["id"],path,database=db)),
+            ("orientacao",lambda path:generate_from_template(pid,path,"Orientações fictícias: hidratação, sono e registro alimentar",title="Orientações")),
+        ):
+            target=folder/f"{pid}-{label}.pdf"
+            fn(target)
+            require(target.exists() and target.stat().st_size>600, f"PDF inválido: {target}")
+            require(target.read_bytes()[:5]==b"%PDF-",f"Cabeçalho PDF inválido: {target}")
+    check(f"Exportação de PDFs {name}", export_and_verify)
     require(len(assessments.list(pid)) == 3, "Avaliações não persistidas")
     require(len(plans.list(pid)) >= 1, "Plano não persistido")
 require(len(patients.list()) == len(personas), "Pacientes não persistidos")
