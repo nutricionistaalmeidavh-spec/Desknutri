@@ -54,6 +54,8 @@ personas = [
     ("Bariátrico acompanhamento QA", "M", "1986-09-20", "Acompanhamento pós-bariátrico"),
     ("SIBO acompanhamento QA", "F", "1993-11-12", "Acompanhamento gastrointestinal"),
 ]
+with db.transaction() as conn:
+    conn.execute("INSERT INTO alimentos(categoria,descricao,kcal,proteina,lipideos,carboidrato,fibra,origem) VALUES(?,?,?,?,?,?,?,?)", ("Cereais","Arroz integral cozido QA",124,2.6,1.0,25.8,2.7,"QA"))
 ids = []
 for i, (name, sex, birth, note) in enumerate(personas):
     pid = patients.create(name, sex, birth, f"11999990{i:03d}", f"qa-persona-{i}@example.invalid", note)
