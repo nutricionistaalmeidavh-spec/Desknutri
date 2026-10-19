@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import date,timedelta
 from pathlib import Path
-from PySide6.QtCore import Qt,QTimer,QDate,QSettings
+from PySide6.QtCore import Qt,QTimer,QDate
 from PySide6.QtGui import QKeySequence,QShortcut
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QHBoxLayout,QVBoxLayout,QLabel,QPushButton,QStackedWidget,QLineEdit,QComboBox,QTableWidget,QHeaderView,QDialog,QFormLayout,QMessageBox,QFileDialog,QTextEdit,QInputDialog,QCheckBox,QDateEdit,QCalendarWidget,QTabWidget,QGridLayout,QFrame)
 from .common import button,item,show_error
@@ -21,6 +21,7 @@ from nutridesktop.services.security_settings import SecuritySettings
 from nutridesktop.core.security import SessionLock
 from nutridesktop.core.paths import DB_PATH,DATA_DIR
 from nutridesktop.services.local_protection import LocalProtectionService
+from nutridesktop.services.app_settings import AppSettings
 from nutridesktop.version import APP_VERSION,SCHEMA_VERSION,CLINICAL_CONTENT_VERSION
 
 STYLE=APP_STYLE
@@ -336,12 +337,12 @@ class MainWindow(QMainWindow):
         c.addWidget(section_title('Dados do consultório e profissional'))
         c.addWidget(muted('Informações salvas localmente neste computador.'))
         self.clinic_fields={}
-        profile=QSettings('ArtiSys','NutriDesk')
+        profile=AppSettings(self.pr.db)
         form=QFormLayout()
         for key,title in [('nome','Nome do consultório'),('identidade','Identidade / nome fantasia'),('profissional','Nome do profissional'),('registro','Registro profissional'),('telefone','Telefone'),('email','E-mail'),('endereco','Endereço')]:
             field=QLineEdit()
             field.setObjectName('clinic_'+key)
-            field.setText(str(profile.value('clinic/'+key,'') or ''))
+            field.setText(str(profile.get({'nome':'clinica_nome','identidade':'clinica_identidade','profissional':'profissional_nome','registro':'profissional_crn','telefone':'profissional_telefone','email':'profissional_email','endereco':'clinica_endereco'}[key],'') or ''))
             self.clinic_fields[key]=field
             form.addRow(title,field)
         c.addLayout(form)
@@ -360,11 +361,9 @@ class MainWindow(QMainWindow):
         try:
             values={key:field.text().strip() for key,field in self.clinic_fields.items()}
             if values['email']:email(values['email'])
-            settings=QSettings('ArtiSys','NutriDesk')
-            for key,value in values.items():settings.setValue('clinic/'+key,value)
-            settings.sync()
-            if settings.status()!=QSettings.NoError:
-                raise OSError('Não foi possível gravar as configurações locais.')
+            settings=AppSettings(self.pr.db)
+            keys={'nome':'clinica_nome','identidade':'clinica_identidade','profissional':'profissional_nome','registro':'profissional_crn','telefone':'profissional_telefone','email':'profissional_email','endereco':'clinica_endereco'}
+            for key,value in values.items():settings.set(keys[key],value)
             QMessageBox.information(self,'Consultório','Dados salvos neste computador.')
         except Exception as exc:show_error(self,'Consultório',exc)
 
