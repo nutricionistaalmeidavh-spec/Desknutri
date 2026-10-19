@@ -47,7 +47,7 @@ class PinDialog(QDialog):
         else:QMessageBox.warning(self,'PIN','PIN inválido.')
 
 class MainWindow(QMainWindow):
-    NAV=['Dashboard','Pacientes','Agenda','Consultas','Avaliações','Planos','Orientações','Curvas','Materno-infantil','Biblioteca','Configurações']
+    NAV=['Dashboard','Pacientes','Agenda','Consultas','Avaliações','Planos','Orientações','Curvas','Materno-infantil','Bariátrica','SIBO','Biblioteca','Configurações']
     def __init__(self):
         super().__init__();self.setObjectName('nutridesk-main');self.setWindowTitle(f'NutriDesk {APP_VERSION}');self.resize(1440,900)
         theme_manager=QApplication.instance().property('theme_manager');self.theme_manager=theme_manager
@@ -91,8 +91,10 @@ class MainWindow(QMainWindow):
         if not ok:return
         from .refined_patient_dialog import RefinedPatientDialog
         dlg=RefinedPatientDialog(int(patients[labels.index(label)]['id']),self)
-        target={'Consultas':'Consulta','Avaliações':'Avaliações','Planos':'Plano alimentar','Orientações':'Arquivos'}
+        target={'Consultas':'Consulta','Avaliações':'Avaliações','Planos':'Plano alimentar','Orientações':'Arquivos','Bariátrica':'Consulta','SIBO':'Consulta'}
         wanted=target[name]
+        if name in ('Bariátrica','SIBO'):
+            dlg.setWindowTitle(f'{name} • Prontuário clínico')
         for i in range(dlg.tabs.count()):
             if dlg.tabs.tabText(i)==wanted:
                 dlg.tabs.setCurrentIndex(i)
@@ -101,7 +103,7 @@ class MainWindow(QMainWindow):
 
     def show_page(self,name):
         self.lock.touch()
-        if name in ('Consultas','Avaliações','Planos','Orientações'):
+        if name in ('Consultas','Avaliações','Planos','Orientações','Bariátrica','SIBO'):
             self.open_clinical_shortcut(name)
             return
         if name=='Curvas':name='Crescimento WHO'
