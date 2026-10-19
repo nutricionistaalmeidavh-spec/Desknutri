@@ -57,7 +57,8 @@ class MainWindow(QMainWindow):
         self.pr=PatientRepository();self.ag=AgendaRepository();self.rr=RecipeRepository();self.fr=FoodRepository();self.tr=TemplateRepository();self.pro=ProtocolRepository();self.gs=GrowthService();self.sec=SecuritySettings();self.local_protection=LocalProtectionService();row=self.sec.get();self.lock=SessionLock(row['auto_lock_minutes'] if row else 15);self.pages={};self._build();self._shortcuts();self.show_page('Dashboard');self.timer=QTimer(self);self.timer.timeout.connect(self.check_lock);self.timer.start(15000)
     def _build(self):
         root=QWidget();root.setObjectName('appRoot');self.setCentralWidget(root);l=QHBoxLayout(root);l.setContentsMargins(0,0,0,0);l.setSpacing(0)
-        side=QWidget();side.setObjectName('sidebar');side.setFixedWidth(226);sv=QVBoxLayout(side);sv.setContentsMargins(14,18,14,14);sv.setSpacing(4)
+        side=QScrollArea();side.setObjectName('sidebarScroll');side.setWidgetResizable(True);side.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff);side.setFixedWidth(226)
+        side_content=QWidget();side_content.setObjectName('sidebar');sv=QVBoxLayout(side_content);sv.setContentsMargins(14,18,14,14);sv.setSpacing(4);side.setWidget(side_content)
         brand=QLabel('NutriDesk');brand.setObjectName('brand');sv.addWidget(brand);sv.addWidget(button('+ Nova consulta',self.new_consultation,True));self.nav={};self.nav_sections={}
         for section,names in NAV_GROUPS.items():
             lab=QLabel(section);lab.setObjectName('navSection');sv.addWidget(lab);self.nav_sections[section]=lab
