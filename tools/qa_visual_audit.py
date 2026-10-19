@@ -10,6 +10,11 @@ from nutridesktop.data.database import db
 from nutridesktop.ui.application_window import MainWindow
 out=Path(os.environ["SCREENSHOT_DIR"]).resolve();out.mkdir(parents=True,exist_ok=True)
 db.initialize()
+from nutridesktop.data.repositories import PatientRepository
+qa_patients=PatientRepository()
+if not qa_patients.list():
+    qa_patients.create('Paciente QA Adulto','F','1991-06-15')
+    qa_patients.create('Paciente QA Infantil','M','2022-02-01')
 app=QApplication([])
 window=MainWindow()
 window.resize(1440,900)
@@ -29,18 +34,14 @@ for page in ("Dashboard","Pacientes","Agenda","Biblioteca","Configurações"):
                     tabs.setCurrentIndex(i);shot("Config-"+tabs.tabText(i).replace("/","-"),window)
     except Exception as e:print("ERROR",page,repr(e),flush=True);traceback.print_exc()
 try:
-    from nutridesktop.data.repositories import PatientRepository
     from nutridesktop.ui.refined_patient_dialog import RefinedPatientDialog
-    patients=PatientRepository().list()
-    if patients:
-        pid=int(patients[0]["id"])
-        dialog=RefinedPatientDialog(pid,window)
+    for patient in qa_patients.list():
+        dialog=RefinedPatientDialog(int(patient['id']),window)
         dialog.show();app.processEvents()
         for i in range(dialog.tabs.count()):
             dialog.tabs.setCurrentIndex(i);app.processEvents()
-            shot("Prontuario-"+dialog.tabs.tabText(i),dialog)
+            shot('Prontuario-'+str(patient['id'])+'-'+dialog.tabs.tabText(i),dialog)
         dialog.close()
-    else:print("NO_PATIENTS: patient tabs not captured",flush=True)
 except Exception as e:print("ERROR patient",repr(e),flush=True);traceback.print_exc()
 window.close()
 print("TOTAL_PNG",len(list(out.glob("*.png"))),flush=True)
