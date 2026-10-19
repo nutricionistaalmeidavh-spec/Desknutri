@@ -3,7 +3,8 @@ from collections import OrderedDict
 from datetime import date,datetime
 
 NAV_GROUPS=OrderedDict([
-    ('TRABALHO',['Dashboard','Pacientes','Agenda']),
+    ('TRABALHO',['Dashboard','Pacientes','Agenda','Consultas','Avaliações','Planos','Orientações']),
+    ('CLÍNICA',['Curvas','Materno-infantil']),
     ('CONTEÚDO',['Biblioteca']),
     ('SISTEMA',['Configurações']),
 ])
