@@ -3,7 +3,7 @@ from datetime import date,timedelta
 from pathlib import Path
 from PySide6.QtCore import Qt,QTimer,QDate
 from PySide6.QtGui import QKeySequence,QShortcut
-from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QHBoxLayout,QVBoxLayout,QLabel,QPushButton,QStackedWidget,QLineEdit,QComboBox,QTableWidget,QHeaderView,QDialog,QFormLayout,QMessageBox,QFileDialog,QTextEdit,QInputDialog,QCheckBox,QDateEdit,QCalendarWidget,QTabWidget,QGridLayout,QFrame)
+from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QHBoxLayout,QVBoxLayout,QLabel,QPushButton,QStackedWidget,QLineEdit,QComboBox,QTableWidget,QHeaderView,QDialog,QFormLayout,QMessageBox,QFileDialog,QTextEdit,QInputDialog,QCheckBox,QDateEdit,QCalendarWidget,QTabWidget,QGridLayout,QFrame,QScrollArea)
 from .common import button,item,show_error
 from .patient_dialog import PatientDialog,FoodSearchDialog
 from .import_dialog import ImportDialog
