@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import date,timedelta
 from pathlib import Path
-from PySide6.QtCore import Qt,QTimer,QDate
+from PySide6.QtCore import Qt,QTimer,QDate,QSettings
 from PySide6.QtGui import QKeySequence,QShortcut
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QHBoxLayout,QVBoxLayout,QLabel,QPushButton,QStackedWidget,QLineEdit,QComboBox,QTableWidget,QHeaderView,QDialog,QFormLayout,QMessageBox,QFileDialog,QTextEdit,QInputDialog,QCheckBox,QDateEdit,QCalendarWidget,QTabWidget,QGridLayout,QFrame)
 from .common import button,item,show_error
@@ -46,7 +46,7 @@ class PinDialog(QDialog):
         else:QMessageBox.warning(self,'PIN','PIN inválido.')
 
 class MainWindow(QMainWindow):
-    NAV=['Dashboard','Pacientes','Agenda','Biblioteca','Configurações']
+    NAV=['Dashboard','Pacientes','Agenda','Consultas','Avaliações','Planos','Orientações','Curvas','Materno-infantil','Biblioteca','Configurações']
     def __init__(self):
         super().__init__();self.setObjectName('nutridesk-main');self.setWindowTitle(f'NutriDesk {APP_VERSION}');self.resize(1440,900)
         theme_manager=QApplication.instance().property('theme_manager');self.theme_manager=theme_manager
@@ -79,8 +79,31 @@ class MainWindow(QMainWindow):
         row=self.sec.get()
         if row and row['pin_hash'] and self.lock.expired():
             dlg=PinDialog(self.sec,self);dlg.exec();self.lock.touch()
+    def open_clinical_shortcut(self,name):
+        patients=self.pr.list()
+        if not patients:
+            QMessageBox.information(self,name,'Cadastre um paciente primeiro.')
+            self.show_page('Pacientes')
+            return
+        labels=[f"{p['nome']} (#{p['id']})" for p in patients]
+        label,ok=QInputDialog.getItem(self,name,'Selecione o paciente:',labels,0,False)
+        if not ok:return
+        from .refined_patient_dialog import RefinedPatientDialog
+        dlg=RefinedPatientDialog(int(patients[labels.index(label)]['id']),self)
+        target={'Consultas':'Consulta','Avaliações':'Avaliações','Planos':'Plano alimentar','Orientações':'Arquivos'}
+        wanted=target[name]
+        for i in range(dlg.tabs.count()):
+            if dlg.tabs.tabText(i)==wanted:
+                dlg.tabs.setCurrentIndex(i)
+                break
+        dlg.exec()
+
     def show_page(self,name):
         self.lock.touch()
+        if name in ('Consultas','Avaliações','Planos','Orientações'):
+            self.open_clinical_shortcut(name)
+            return
+        if name=='Curvas':name='Crescimento WHO'
         if name in self.pages:self.stack.setCurrentWidget(self.pages[name]);self._mark_nav(name);return
         factory={'Dashboard':self.dashboard,'Pacientes':self.patients,'Agenda':self.agenda,'Biblioteca':self.library,'Alimentos':self.foods,'Crescimento WHO':self.growth,'Materno-infantil':self.maternal,'Receitas':self.recipes,'Templates':self.templates,'Protocolos':self.protocols,'Configurações':self.settings}.get(name)
         if not factory:return
@@ -309,7 +332,21 @@ class MainWindow(QMainWindow):
         if self.theme_manager:ap.addWidget(ThemeSelector(self.theme_manager.key,self.theme_manager.apply))
         else:ap.addWidget(muted('O seletor de tema será habilitado na próxima inicialização.'))
         ap.addStretch()
-        clinic,c=tab('Consultório');c.addWidget(section_title('Preferências do consultório'));c.addWidget(muted('Identidade, dados profissionais e padrões clínicos serão usados nos relatórios e documentos.'));c.addStretch()
+        clinic,c=tab('Consultório')
+        c.addWidget(section_title('Dados do consultório e profissional'))
+        c.addWidget(muted('Informações salvas localmente neste computador.'))
+        self.clinic_fields={}
+        profile=QSettings('ArtiSys','NutriDesk')
+        form=QFormLayout()
+        for key,title in [('nome','Nome do consultório'),('identidade','Identidade / nome fantasia'),('profissional','Nome do profissional'),('registro','Registro profissional'),('telefone','Telefone'),('email','E-mail'),('endereco','Endereço')]:
+            field=QLineEdit()
+            field.setObjectName('clinic_'+key)
+            field.setText(str(profile.value('clinic/'+key,'') or ''))
+            self.clinic_fields[key]=field
+            form.addRow(title,field)
+        c.addLayout(form)
+        c.addWidget(button('Salvar dados do consultório',self.save_clinic_profile,True))
+        c.addStretch()
         reports,r=tab('Relatórios');r.addWidget(section_title('Relatórios e documentos'));r.addWidget(muted('Escolha o Template padrão para cada tipo. O padrão ainda pode ser substituído ao gerar um documento.'));self.report_default_selectors={}
         for typ in ['Plano','Relatório','Orientação','Receita']:
             rowt=QHBoxLayout();rowt.addWidget(QLabel(f'Template padrão — {typ}'));combo=QComboBox();templates=self.tr.list(typ);[(combo.addItem(t['nome'],t['id'])) for t in templates];default=self.tr.default(typ);idx=combo.findData(default['id']) if default else -1;combo.setCurrentIndex(max(idx,0));rowt.addWidget(combo,1);rowt.addWidget(button('Salvar',lambda checked=False,t=typ,c=combo:self.save_default_template(t,c)));r.addLayout(rowt);self.report_default_selectors[typ]=combo
@@ -319,6 +356,18 @@ class MainWindow(QMainWindow):
         data_tab,dl=tab('Dados e portabilidade');self.settings_data_layout=dl;dl.addWidget(section_title('Dados locais'));dl.addWidget(muted(f'Banco: {DB_PATH}\nPasta de dados: {DATA_DIR}'));dl.addStretch()
         advanced,adv=tab('Avançado');self.settings_advanced_layout=adv;adv.addWidget(section_title('Recursos técnicos'));row3=QHBoxLayout();row3.addWidget(button('Ativar EFS',self.enable_local_encryption));row3.addWidget(button('Verificar EFS',self.local_encryption_status));row3.addWidget(button('Desativar EFS',self.disable_local_encryption));row3.addStretch();adv.addLayout(row3);adv.addWidget(muted('EFS é opcional e depende da edição do Windows/NTFS.'));adv.addStretch()
         v.addWidget(tabs);return w
+    def save_clinic_profile(self):
+        try:
+            values={key:field.text().strip() for key,field in self.clinic_fields.items()}
+            if values['email']:email(values['email'])
+            settings=QSettings('ArtiSys','NutriDesk')
+            for key,value in values.items():settings.setValue('clinic/'+key,value)
+            settings.sync()
+            if settings.status()!=QSettings.NoError:
+                raise OSError('Não foi possível gravar as configurações locais.')
+            QMessageBox.information(self,'Consultório','Dados salvos neste computador.')
+        except Exception as exc:show_error(self,'Consultório',exc)
+
     def save_default_template(self,typ,combo):
         template_id=combo.currentData()
         if template_id:self.tr.set_default(int(template_id),typ);QMessageBox.information(self,'Template padrão',f'Template padrão de {typ} atualizado.')
