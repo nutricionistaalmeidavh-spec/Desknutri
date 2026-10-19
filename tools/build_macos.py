@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import time
 import platform
 import shutil
 import subprocess
@@ -62,8 +63,18 @@ def main() -> None:
         volume = Path(staging)
         shutil.copytree(app, volume / "NutriDesk.app", symlinks=True)
         (volume / "Applications").symlink_to("/Applications", target_is_directory=True)
-        run("hdiutil", "create", "-volname", "NutriDesk", "-srcfolder", str(volume),
-            "-ov", "-format", "UDZO", str(dmg))
+        # macOS runners may transiently hold disk image resources (Resource busy).
+        for attempt in range(1, 4):
+            try:
+                run("hdiutil", "create", "-volname", "NutriDesk", "-srcfolder", str(volume),
+                    "-ov", "-format", "UDZO", str(dmg))
+                break
+            except subprocess.CalledProcessError:
+                if attempt == 3:
+                    raise
+                dmg.unlink(missing_ok=True)
+                print(f"DMG create attempt {attempt} failed; retrying", flush=True)
+                time.sleep(attempt * 8)
 
     run("hdiutil", "verify", str(dmg))
     print(f"DMG_READY {dmg.name} sha256={sha256(dmg)}", flush=True)
