@@ -72,6 +72,12 @@ for i, (name, sex, birth, note) in enumerate(personas):
                    "imc": round(weight/((165+i*3)/100)**2, 2)}
         check(f"Avaliação {name} #{j+1}", lambda pid=pid,payload=payload: assessments.create(pid,payload))
     check(f"Plano {name}", lambda pid=pid,name=name: plans.create(pid,"Plano QA - "+name, 2000, "Cinco refeições; metas individualizadas em consulta"))
+    def fill_meals(pid=pid):
+        matches = food.search("arroz")
+        require(bool(matches), "Tabela de alimentos sem arroz")
+        plans.add_food(plans.list(pid)[0]["id"], "Almoço", matches[0]["id"], 120)
+        require(len(plans.items(plans.list(pid)[0]["id"])) >= 1, "Alimento não persistiu")
+    check(f"Alimentos no plano {name}", fill_meals)
     check(f"Consulta {name}", lambda pid=pid,note=note: agenda.create(pid,(date.today()+timedelta(days=3)).isoformat(),"09:30","Retorno",note))
     def edit_and_verify(pid=pid):
         patients.update(pid, observacoes="Retorno: plano revisado e evolução avaliada")
@@ -88,12 +94,17 @@ for i, (name, sex, birth, note) in enumerate(personas):
         for label,fn in (
             ("relatorio",lambda path:generate_complete_report(pid,path,database=db)),
             ("plano",lambda path:generate_plan_pdf(pid,plans.list(pid)[0]["id"],path,database=db)),
-            ("orientacao",lambda path:generate_from_template(pid,path,"Orientações fictícias: hidratação, sono e registro alimentar",title="Orientações")),
+            ("orientacao",lambda path:generate_from_template(pid,path,"Orientações fictícias: hidratação, sono e registro alimentar",title="Orientações",database=db)),
         ):
             target=folder/f"{pid}-{label}.pdf"
             fn(target)
             require(target.exists() and target.stat().st_size>600, f"PDF inválido: {target}")
             require(target.read_bytes()[:5]==b"%PDF-",f"Cabeçalho PDF inválido: {target}")
+            from pypdf import PdfReader
+            pdf_text="\\n".join(page.extract_text() or "" for page in PdfReader(str(target)).pages)
+            require("Consultório Nutri QA" in pdf_text, f"Consultório ausente: {target}")
+            require("Dra. Exemplo QA" in pdf_text, f"Profissional ausente: {target}")
+
     check(f"Exportação de PDFs {name}", export_and_verify)
     require(len(assessments.list(pid)) == 3, "Avaliações não persistidas")
     require(len(plans.list(pid)) >= 1, "Plano não persistido")
