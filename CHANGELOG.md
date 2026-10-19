@@ -1,3 +1,10 @@
+# NutriDesktop 6.5.3 — Navegação clínica e documentos
+
+- Acessos clínicos mais claros para consultas, avaliações, planos, orientações, curvas e materno-infantil.
+- Atalhos para os acompanhamentos bariátrico e SIBO no prontuário existente.
+- Configurações do consultório e identificação profissional em relatórios, planos e orientações.
+- QA P2 com pacientes e dados fictícios em Windows e macOS.
+
 # NutriDesktop 6.5.2 — Atualização integrada e recuperação segura
 
 - Verificação da GitHub Release estável em QThread, sem bloquear a interface principal.
