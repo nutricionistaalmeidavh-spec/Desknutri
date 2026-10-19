@@ -4,7 +4,7 @@ from nutridesktop.ui.main_window import MainWindow
 
 def test_premium_navigation_entries():
     entries=[name for group in NAV_GROUPS.values() for name in group]
-    for name in ('Consultas','Avaliações','Planos','Orientações','Curvas','Materno-infantil'):
+    for name in ('Consultas','Avaliações','Planos','Orientações','Curvas','Materno-infantil','Bariátrica','SIBO'):
         assert name in entries
     assert len(entries)==len(set(entries))
 
