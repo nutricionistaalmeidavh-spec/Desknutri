@@ -1,0 +1,47 @@
+name: NutriDesk Visual Audit 6.4 vs 6.5
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/visual-audit.yml'
+      - 'tools/qa_visual_audit.py'
+permissions:
+  contents: read
+jobs:
+  screenshots:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [v6.4.0, v6.5.2]
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: audit
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.version }}
+          path: target
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        working-directory: target
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -r license_server/requirements.txt
+          python -m pip install httpx2
+      - name: Capture real Qt windows
+        working-directory: target
+        env:
+          SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
+          NUTRIDESKTOP_DATA_DIR: ${{ runner.temp }}/nutridesk-visual-${{ matrix.version }}
+        run: python ../audit/tools/qa_visual_audit.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-${{ matrix.version }}
+          path: screenshots/*.png
+          if-no-files-found: warn
