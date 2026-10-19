@@ -206,9 +206,10 @@ def generate_complete_report(pid, destination, sections=None, database=None):
     return path
 
 
-def generate_from_template(pid, destination, rendered_text, title="Documento"):
+def generate_from_template(pid, destination, rendered_text, title="Documento", database=None):
     pdf = ClinicalPDF()
     pdf.report_title = title
+    pdf.identity_lines = _identity(database or PatientRepository().db)
     pdf.set_auto_page_break(True, 15)
     pdf.add_page()
     pdf.set_font("Helvetica", "", 10)
