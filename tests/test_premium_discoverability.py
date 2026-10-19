@@ -8,12 +8,13 @@ def test_premium_navigation_entries():
         assert name in entries
     assert len(entries)==len(set(entries))
 
-def test_clinic_settings_persist_across_reopening(qtbot,monkeypatch,tmp_path):
+def test_clinic_settings_persist_across_reopening(monkeypatch,tmp_path):
     from PySide6.QtCore import QSettings
     QSettings.setDefaultFormat(QSettings.IniFormat)
     QSettings.setPath(QSettings.IniFormat,QSettings.UserScope,str(tmp_path))
+    from PySide6.QtWidgets import QApplication
+    app=QApplication.instance() or QApplication([])
     w=MainWindow()
-    qtbot.addWidget(w)
     w.show_page('Configurações')
     fields=w.clinic_fields
     fields['nome'].setText('Clínica QA')
