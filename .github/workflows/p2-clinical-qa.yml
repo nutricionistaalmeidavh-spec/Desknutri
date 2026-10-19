@@ -1,0 +1,50 @@
+name: NutriDesk P2 Clinical QA Gate
+
+on:
+  pull_request:
+    paths:
+      - "nutridesktop/**"
+      - "tests/**"
+      - "tools/qa_p2_clinical.py"
+      - ".github/workflows/p2-clinical-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clinical-regression:
+    name: clinical-qa-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install system Qt libraries (Linux only)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libxkbcommon0
+      - name: Install application dependencies
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -r license_server/requirements.txt
+          python -m pip install httpx2
+      - name: Existing regression suite
+        run: python -m pytest -q
+      - name: Clinical workflows with synthetic patients and screenshots
+        run: python tools/qa_p2_clinical.py
+      - name: Upload clinical QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-clinical-${{ matrix.os }}
+          path: qa-output/
+          if-no-files-found: warn
+          retention-days: 30
