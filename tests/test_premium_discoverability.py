@@ -11,6 +11,8 @@ def test_premium_navigation_entries():
 def test_clinic_settings_persist_across_reopening(monkeypatch,tmp_path):
     from PySide6.QtWidgets import QApplication
     app=QApplication.instance() or QApplication([])
+    from nutridesktop.data.database import db
+    db.initialize()
     w=MainWindow()
     w.show_page('Configurações')
     fields=w.clinic_fields
