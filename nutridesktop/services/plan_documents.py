@@ -6,6 +6,7 @@ from fpdf.enums import XPos,YPos
 from nutridesktop.data.repositories import PatientRepository,PlanRepository,TemplateRepository
 from nutridesktop.services.templates import STYLE_PRESETS
 from nutridesktop.services.plans import plan_nutrients
+from nutridesktop.services.reports import _identity
 
 
 def _rgb(hexv):
@@ -31,6 +32,10 @@ def generate_plan_pdf(patient_id,plan_id,destination,template_id=None,database=N
     pdf.set_fill_color(*accent);pdf.rect(0,0,pdf.w,25,'F');pdf.set_xy(12,8);pdf.set_text_color(255,255,255);pdf.set_font('Helvetica','B',18);pdf.cell(0,8,_txt('Plano alimentar'))
     pdf.set_text_color(*text);pdf.set_xy(12,31);pdf.set_font('Helvetica','B',15);pdf.cell(0,8,_txt(patient['nome']),new_x=XPos.LMARGIN,new_y=YPos.NEXT)
     pdf.set_font('Helvetica','',9);pdf.cell(0,6,_txt(f"{plan['nome']} • {plan['data']} • Meta {plan['vet_meta'] or '-'} kcal"),new_x=XPos.LMARGIN,new_y=YPos.NEXT);pdf.ln(3)
+    for line in _identity(db):
+        if line:
+            pdf.set_font('Helvetica','',8);pdf.cell(0,5,_txt(line),new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+    pdf.ln(2)
     for meal,rows in meals.items():
         pdf.set_fill_color(*soft);pdf.set_font('Helvetica','B',11);pdf.cell(0,8,_txt(meal),fill=True,new_x=XPos.LMARGIN,new_y=YPos.NEXT)
         pdf.set_font('Helvetica','',9)
