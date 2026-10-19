@@ -9,9 +9,6 @@ def test_premium_navigation_entries():
     assert len(entries)==len(set(entries))
 
 def test_clinic_settings_persist_across_reopening(monkeypatch,tmp_path):
-    from PySide6.QtCore import QSettings
-    QSettings.setDefaultFormat(QSettings.IniFormat)
-    QSettings.setPath(QSettings.IniFormat,QSettings.UserScope,str(tmp_path))
     from PySide6.QtWidgets import QApplication
     app=QApplication.instance() or QApplication([])
     w=MainWindow()
@@ -25,4 +22,7 @@ def test_clinic_settings_persist_across_reopening(monkeypatch,tmp_path):
     w.show_page('Configurações')
     assert w.clinic_fields['nome'].text()=='Clínica QA'
     assert w.clinic_fields['profissional'].text()=='Profissional QA'
+    from nutridesktop.services.reports import _identity
+    assert 'Clínica QA' in _identity(w.pr.db)
+    assert any('Profissional QA' in x for x in _identity(w.pr.db))
     w.close()
