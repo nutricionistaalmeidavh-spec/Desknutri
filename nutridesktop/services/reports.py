@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+import json
 
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
@@ -67,7 +68,16 @@ def _identity(database) -> list[str]:
             "SELECT chave,valor FROM configuracoes WHERE chave IN (%s)" % ",".join("?" * len(keys)),
             keys,
         ).fetchall()
-    cfg = {r["chave"]: r["valor"] for r in rows}
+    def decode(value):
+        if value is None:
+            return ""
+        try:
+            decoded = json.loads(value)
+        except (ValueError, TypeError):
+            return str(value)
+        return str(decoded) if decoded is not None else ""
+
+    cfg = {r["chave"]: decode(r["valor"]) for r in rows}
     clinic = cfg.get("clinica_nome", "")
     professional = " - ".join(x for x in (cfg.get("profissional_nome", ""), cfg.get("profissional_crn", "")) if x)
     contact = " | ".join(x for x in (cfg.get("profissional_telefone", ""), cfg.get("profissional_email", "")) if x)
