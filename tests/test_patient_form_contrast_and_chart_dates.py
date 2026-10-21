@@ -28,9 +28,13 @@ def test_patient_forms_have_painted_light_background_not_native_dark(tmp_path, m
             assert isinstance(area, QScrollArea)
             content = area.widget()
             assert content.objectName() == "patientWorkspaceContent"
-            assert content.autoFillBackground(), "Fundo do formulário deve ser pintado em todas as plataformas"
-            # A paleta precisa ser explicitamente controlada pelo tema, não pelo modo escuro do Windows.
+            # Qt desativa autoFillBackground quando QSS define um background.
+            # Verificamos o pixel realmente pintado, não um detalhe interno.
             expected = get_theme(DEFAULT_THEME).bg.lower()
+            color = content.grab().toImage().pixelColor(3, 3).name().lower()
+            assert color == expected, (
+                f"Aba {dialog.tabs.tabText(index)} pintou {color} em vez de {expected}"
+            )
             assert content.palette().color(QPalette.Window).name().lower() == expected
     finally:
         dialog.close()
