@@ -226,6 +226,10 @@ QLabel#comparisonDelta {{ color: {t.success}; font-size: 12px; font-weight: 700;
 QLabel#sectionTitle {{ color: {t.text}; font-size: 15px; font-weight: 750; }}
 
 /* Prontuário */
+/* O novo QScrollArea não pode expor o fundo escuro nativo do Windows. */
+QScrollArea#patientWorkspaceScroll {{ background: {t.bg}; border: 0; }}
+QWidget#patientWorkspaceViewport {{ background: {t.bg}; }}
+QWidget#patientWorkspaceContent {{ background: {t.bg}; }}
 QFrame#patientHeader {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: {t.radius_md}px; }}
 QLabel#patientName {{ color: {t.text}; font-size: 22px; font-weight: 800; }}
 QLabel#patientNext {{ color: {t.accent}; font-size: 12px; font-weight: 650; }}
