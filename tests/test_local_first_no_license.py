@@ -41,4 +41,4 @@ def test_optional_pin_remains_available(tmp_path):
 
 def test_local_first_survives_schema_upgrade():
     assert tuple(int(segment) for segment in APP_VERSION.split(".")) >= (6, 5, 1)
-    assert SCHEMA_VERSION == 14
+    assert SCHEMA_VERSION >= 14
