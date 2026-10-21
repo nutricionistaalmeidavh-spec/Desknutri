@@ -214,7 +214,7 @@ class PatientEvolutionCard(Card):
     def _style_figure(self, fig, tokens):
         # 'tight_layout' recalculado após o resize do QTabWidget em notebooks
         # comprimía o rodapé do canvas; reserve espaço real às datas no eixo X.
-        fig.set_tight_layout(False)
+        fig.set_layout_engine(None)
         fig.subplots_adjust(left=.10, right=.91, top=.82, bottom=.23)
         fig.patch.set_facecolor(tokens.surface)
         for ax in fig.axes:
