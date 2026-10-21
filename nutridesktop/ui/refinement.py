@@ -479,14 +479,14 @@ class UiRefinementMixin:
             if self.pr.can_delete(pid):
                 heading = "Excluir paciente"
                 message = (
-                    f"Excluir definitivamente o cadastro de {patient['nome']}?\\n\\n"
+                    f"Excluir definitivamente o cadastro de {patient['nome']}?\n\n"
                     "Nenhum atendimento ou prontuário foi encontrado. "
                     "A exclusão do cadastro não poderá ser desfeita."
                 )
             else:
                 heading = "Arquivar paciente"
                 message = (
-                    f"{patient['nome']} possui dados clínicos ou registros associados.\\n\\n"
+                    f"{patient['nome']} possui dados clínicos ou registros associados.\n\n"
                     "Para proteger o prontuário, ele será arquivado, não apagado. "
                     "Será possível restaurá-lo usando Mostrar arquivados. Continuar?"
                 )
