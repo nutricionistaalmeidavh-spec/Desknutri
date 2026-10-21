@@ -1,3 +1,10 @@
+# NutriDesktop 6.5.4 — Prontuário adaptado a telas menores
+
+- Corrige o prontuário cortado em notebooks no modo paisagem: as seis abas permitem rolagem vertical e horizontal quando necessário.
+- Dimensiona a janela inicial conforme a área disponível da tela, mantendo o fluxo de consultas, avaliações e planos.
+- Preserva pacientes, histórico clínico, SQLite schema 14, cálculos e exportações sem migrações.
+- Adiciona testes de regressão de viewport e navegação de abas para evitar retorno do problema.
+
 # NutriDesktop 6.5.3 — Navegação clínica e documentos
 
 - Acessos clínicos mais claros para consultas, avaliações, planos, orientações, curvas e materno-infantil.
