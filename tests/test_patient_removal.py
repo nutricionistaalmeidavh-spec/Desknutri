@@ -97,3 +97,42 @@ def test_ui_exposes_explicit_delete_archive_and_restore_actions():
     assert 'button("Restaurar paciente", self.restore_selected_patient' in source
     assert "QMessageBox.question(" in source
     assert "Mostrar arquivados" in source
+
+
+def test_ui_selected_patient_delete_and_restore_workflow(tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    from nutridesktop.data.database import db
+    from nutridesktop.ui.application_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(db, "path", tmp_path / "ui-patients.db")
+    db.initialize()
+    patients = PatientRepository(db)
+    wrong = patients.create("Cadastro lançado por engano", "F", "2001-05-01")
+    history = patients.create("Paciente com histórico", "M", "1988-09-09")
+    AssessmentRepository(db).create(
+        history, {"data": "2026-10-21", "peso": 76, "altura_cm": 178, "idade": 38, "imc": 24}
+    )
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: None)
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: pytest.fail("UI warning"))
+
+    window = MainWindow()
+    window.show_page("Pacientes")
+    for pid in (wrong, history):
+        target = next(
+            i for i in range(window.patient_table.rowCount())
+            if int(window.patient_table.item(i, 0).text()) == pid
+        )
+        window.patient_table.selectRow(target)
+        window.remove_selected_patient()
+
+    assert patients.get(wrong) is None
+    assert patients.get(history)["arquivado_em"] is not None
+    window.show_archived_patients.setChecked(True)
+    assert window.patient_table.rowCount() == 1
+    window.patient_table.selectRow(0)
+    window.restore_selected_patient()
+    assert patients.get(history)["arquivado_em"] is None
+    assert patients.list(archived=True) == []
+    window.close()
