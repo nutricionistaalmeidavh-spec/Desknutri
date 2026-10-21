@@ -13,6 +13,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCalendarWidget,
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QFrame,
@@ -363,6 +364,10 @@ class UiRefinementMixin:
         self.patient_search = toolbar.search
         self.patient_search.setAccessibleName("Buscar paciente por nome")
         self.patient_search.textChanged.connect(self.refresh_patients)
+        self.show_archived_patients = QCheckBox("Mostrar arquivados")
+        self.show_archived_patients.setAccessibleName("Mostrar pacientes arquivados")
+        self.show_archived_patients.toggled.connect(self.refresh_patients)
+        toolbar.add_action(self.show_archived_patients)
         toolbar.add_action(button("Novo paciente", self.new_patient, variant="secondary"))
         toolbar.add_action(button("Nova consulta", self.new_consultation, variant="primary"))
         v.addWidget(toolbar)
@@ -400,10 +405,15 @@ class UiRefinementMixin:
             variant="secondary",
         )
         self.open_patient_button.setEnabled(False)
-        self.patient_table.itemSelectionChanged.connect(
-            lambda: self.open_patient_button.setEnabled(self._has_patient_selection())
-        )
+        self.patient_table.itemSelectionChanged.connect(self._sync_patient_actions)
         footer.addWidget(self.open_patient_button)
+        self.remove_patient_button = button("Excluir paciente", self.remove_selected_patient, variant="ghost")
+        self.remove_patient_button.setEnabled(False)
+        footer.addWidget(self.remove_patient_button)
+        self.restore_patient_button = button("Restaurar paciente", self.restore_selected_patient, variant="secondary")
+        self.restore_patient_button.setEnabled(False)
+        self.restore_patient_button.setVisible(False)
+        footer.addWidget(self.restore_patient_button)
         v.addLayout(footer)
         self.refresh_patients()
         return w
@@ -433,8 +443,79 @@ class UiRefinementMixin:
                     "Nenhum paciente cadastrado",
                     "Cadastre o primeiro paciente para iniciar os atendimentos.",
                 )
+        self._sync_patient_actions()
+
+    def _sync_patient_actions(self):
+        if not hasattr(self, "patient_table"):
+            return
+        selected = self._has_patient_selection()
+        archived = bool(
+            getattr(self, "show_archived_patients", None)
+            and self.show_archived_patients.isChecked()
+        )
         if hasattr(self, "open_patient_button"):
-            self.open_patient_button.setEnabled(self._has_patient_selection())
+            self.open_patient_button.setEnabled(selected and not archived)
+        if hasattr(self, "remove_patient_button"):
+            self.remove_patient_button.setEnabled(selected and not archived)
+            self.remove_patient_button.setVisible(not archived)
+        if hasattr(self, "restore_patient_button"):
+            self.restore_patient_button.setEnabled(selected and archived)
+            self.restore_patient_button.setVisible(archived)
+
+    def _selected_patient(self):
+        if not self._has_patient_selection():
+            return None
+        row = self.patient_table.currentRow()
+        return int(self.patient_table.item(row, 0).text())
+
+    def remove_selected_patient(self):
+        pid = self._selected_patient()
+        if pid is None:
+            return
+        try:
+            patient = self.pr.get(pid)
+            if not patient:
+                raise ValueError("Paciente não localizado.")
+            if self.pr.can_delete(pid):
+                heading = "Excluir paciente"
+                message = (
+                    f"Excluir definitivamente o cadastro de {patient['nome']}?\\n\\n"
+                    "Nenhum atendimento ou prontuário foi encontrado. "
+                    "A exclusão do cadastro não poderá ser desfeita."
+                )
+            else:
+                heading = "Arquivar paciente"
+                message = (
+                    f"{patient['nome']} possui dados clínicos ou registros associados.\\n\\n"
+                    "Para proteger o prontuário, ele será arquivado, não apagado. "
+                    "Será possível restaurá-lo usando Mostrar arquivados. Continuar?"
+                )
+            confirmation = QMessageBox.question(
+                self, heading, message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if confirmation != QMessageBox.Yes:
+                return
+            outcome = self.pr.remove(pid)
+            self.refresh_patients()
+            QMessageBox.information(
+                self,
+                "Paciente",
+                "Cadastro excluído com segurança." if outcome == "deleted"
+                else "Paciente arquivado. O prontuário foi preservado.",
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "Paciente", str(exc))
+
+    def restore_selected_patient(self):
+        pid = self._selected_patient()
+        if pid is None:
+            return
+        try:
+            self.pr.restore(pid)
+            self.refresh_patients()
+            QMessageBox.information(self, "Paciente", "Paciente restaurado com o histórico preservado.")
+        except Exception as exc:
+            QMessageBox.warning(self, "Paciente", str(exc))
 
     def _has_patient_selection(self):
         return (
