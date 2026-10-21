@@ -3,7 +3,7 @@ from datetime import date,datetime
 from pathlib import Path
 from PySide6.QtCore import Qt,QDate,QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QFormLayout,QTabWidget,QWidget,QLineEdit,QComboBox,QTextEdit,QPushButton,QTableWidget,QHeaderView,QMessageBox,QFileDialog,QInputDialog,QLabel,QGridLayout,QCheckBox,QDateEdit,QGroupBox)
+from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QFormLayout,QTabWidget,QWidget,QLineEdit,QComboBox,QTextEdit,QPushButton,QTableWidget,QHeaderView,QMessageBox,QFileDialog,QInputDialog,QLabel,QGridLayout,QCheckBox,QDateEdit,QGroupBox,QScrollArea,QFrame,QApplication)
 from .common import button,item,show_error
 from .design_system import Card,StatCard,EmptyState,section_title,muted
 from .view_models import age_on,age_label
@@ -32,13 +32,47 @@ class FoodSearchDialog(QDialog):
         if r<0:QMessageBox.information(self,'Alimento','Selecione um alimento da lista.');return
         self.selected=self.rows[r];self.accept()
 
+def scrollable_workspace(widget: QWidget) -> QScrollArea:
+    """Mantém cada aba do prontuário navegável em notebooks compactos."""
+    area = QScrollArea()
+    area.setObjectName("patientWorkspaceScroll")
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.NoFrame)
+    area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    area.setWidget(widget)
+    return area
+
+
 class PatientDialog(QDialog):
     def __init__(self,pid,parent=None):
-        super().__init__(parent);self.pid=pid;self.pr=PatientRepository();self.ar=AssessmentRepository();self.pl=PlanRepository();self.fr=FoodRepository();self.docs=DocumentService();self.tr=TimelineRepository();self.anr=AnamnesisRepository();self.phr=PhotoRepository();self.rr=RecipeRepository();self.ag=AgendaRepository();self.gs=GrowthService();self.setWindowTitle('Prontuário • NutriDesk');self.resize(1180,800)
+        super().__init__(parent);self.pid=pid;self.pr=PatientRepository();self.ar=AssessmentRepository();self.pl=PlanRepository();self.fr=FoodRepository();self.docs=DocumentService();self.tr=TimelineRepository();self.anr=AnamnesisRepository();self.phr=PhotoRepository();self.rr=RecipeRepository();self.ag=AgendaRepository();self.gs=GrowthService();self.setWindowTitle('Prontuário • NutriDesk');self._fit_to_screen()
         root=QVBoxLayout(self);head=QHBoxLayout();self.title=QLabel();self.title.setStyleSheet('font-size:26px;font-weight:800');head.addWidget(self.title);self.header_meta=QLabel();self.header_meta.setStyleSheet('color:#697571');head.addWidget(self.header_meta);head.addStretch();head.addWidget(button('Nova consulta',self.open_guided_consultation,True));head.addWidget(button('Editar paciente',self.open_profile_editor));root.addLayout(head)
-        self.tabs=QTabWidget();root.addWidget(self.tabs);self.tabs.addTab(self.summary_tab(),'Resumo');self.tabs.addTab(self.consultation_tab(),'Consulta');self.tabs.addTab(self.assessment_tab(),'Avaliações');self.tabs.addTab(self.plan_tab(),'Plano alimentar');self.tabs.addTab(self.evolution_workspace_tab(),'Evolução');self.tabs.addTab(self.files_workspace_tab(),'Arquivos');self.refresh_header()
+        self.tabs=QTabWidget();root.addWidget(self.tabs, 1)
+        for label, widget in (
+            ('Resumo', self.summary_tab()),
+            ('Consulta', self.consultation_tab()),
+            ('Avaliações', self.assessment_tab()),
+            ('Plano alimentar', self.plan_tab()),
+            ('Evolução', self.evolution_workspace_tab()),
+            ('Arquivos', self.files_workspace_tab()),
+        ):
+            self.tabs.addTab(scrollable_workspace(widget), label)
+        self.refresh_header()
         self._refreshing_summary=False
         self.tabs.currentChanged.connect(self._on_tab_changed)
+    def _fit_to_screen(self):
+        """Dimensiona a janela pela área útil, não pela resolução nominal."""
+        screen = self.screen() or QApplication.primaryScreen()
+        if not screen:
+            self.resize(1180, 800)
+            return
+        usable = screen.availableGeometry()
+        self.resize(
+            min(1180, max(320, usable.width() - 48)),
+            min(800, max(300, usable.height() - 60)),
+        )
+
     def _on_tab_changed(self,index):
         if index==0:self.refresh_summary_tab()
     def refresh_summary_tab(self):
@@ -47,7 +81,7 @@ class PatientDialog(QDialog):
         try:
             old=self.tabs.widget(0)
             self.tabs.removeTab(0)
-            self.tabs.insertTab(0,self.summary_tab(),'Resumo')
+            self.tabs.insertTab(0,scrollable_workspace(self.summary_tab()),'Resumo')
             self.tabs.setCurrentIndex(0)
             if old is not None:old.deleteLater()
         finally:self._refreshing_summary=False
