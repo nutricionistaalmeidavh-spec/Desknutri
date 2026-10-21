@@ -1,9 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass,asdict
 
-# Release build for 6.5.4 (CHANGELOG.md synchronized).
-APP_VERSION = "6.5.4"
-SCHEMA_VERSION = 14
+# Release build for 6.5.5 (CHANGELOG.md synchronized).
+APP_VERSION = "6.5.5"
+SCHEMA_VERSION = 15
 CLINICAL_CONTENT_VERSION = "2026.08"
 WHO_ENGINE_VERSION = "pygrowthstandards-0.1.3"
 RELEASE_CHANNEL = "stable"
