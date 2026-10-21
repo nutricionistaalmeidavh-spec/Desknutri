@@ -108,6 +108,9 @@ class PatientEvolutionCard(Card):
         self._build_comparison_cards()
 
         self.chart_tabs = QTabWidget(self)
+        # A área de rolagem da aba externa assume o excedente em notebooks
+        # compactos; nunca comprimir o eixo X ao ponto de cortar as datas.
+        self.chart_tabs.setMinimumHeight(420)
         self.tab_layouts = {}
         for label, key in COMPARISON_TABS:
             page = QWidget()
@@ -209,6 +212,10 @@ class PatientEvolutionCard(Card):
         return patient_bodyfat_figure(self.assessments, color=tokens.accent)
 
     def _style_figure(self, fig, tokens):
+        # 'tight_layout' recalculado após o resize do QTabWidget em notebooks
+        # comprimía o rodapé do canvas; reserve espaço real às datas no eixo X.
+        fig.set_layout_engine(None)
+        fig.subplots_adjust(left=.10, right=.91, top=.82, bottom=.23)
         fig.patch.set_facecolor(tokens.surface)
         for ax in fig.axes:
             ax.set_facecolor(tokens.surface)
@@ -236,7 +243,7 @@ class PatientEvolutionCard(Card):
             self._clear_layout(layout)
             fig = self._style_figure(self._figure(key, tokens), tokens)
             canvas = FigureCanvasQTAgg(fig)
-            canvas.setMinimumHeight(285)
+            canvas.setMinimumHeight(365)
             layout.addWidget(canvas)
             self.canvases[key] = canvas
             canvas.draw_idle()

@@ -36,10 +36,23 @@ def scrollable_workspace(widget: QWidget) -> QScrollArea:
     """Mantém cada aba do prontuário navegável em notebooks compactos."""
     area = QScrollArea()
     area.setObjectName("patientWorkspaceScroll")
+    area.viewport().setObjectName("patientWorkspaceViewport")
+    widget.setObjectName("patientWorkspaceContent")
     area.setWidgetResizable(True)
     area.setFrameShape(QFrame.NoFrame)
     area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
     area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    # O viewport Qt não pode herdar o fundo do sistema operacional (dark mode).
+    # O tema canônico pinta viewport e conteúdo pelo QSS global.
+    from PySide6.QtGui import QColor, QPalette
+    from nutridesktop.ui_kit.theme import get_theme
+    manager = QApplication.instance().property("theme_manager") if QApplication.instance() else None
+    background = QColor(get_theme(getattr(manager, "key", None)).bg)
+    for surface in (area.viewport(), widget):
+        palette = surface.palette()
+        palette.setColor(QPalette.Window, background)
+        surface.setPalette(palette)
+        surface.setAutoFillBackground(True)
     area.setWidget(widget)
     return area
 

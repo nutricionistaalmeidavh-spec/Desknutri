@@ -1,3 +1,9 @@
+# NutriDesktop 6.5.6 — Prontuário legível em Windows e notebooks
+
+- Corrige fundo escuro não intencional em Avaliações, Consulta e demais abas do prontuário, preservando os rótulos e o contraste do tema selecionado.
+- Corrige datas cortadas na parte inferior dos gráficos da Evolução, com margem fixa no Matplotlib, altura mínima e rolagem preservada em telas menores.
+- Correções visuais sem alterar prontuários, cadastros ou migrações do banco clínico; testes regressivos em PySide6 e Matplotlib.
+
 # NutriDesktop 6.5.5 — Exclusão segura de pacientes
 
 - Ação **Excluir paciente** remove definitivamente cadastros incorretos sem histórico clínico, com confirmação explícita.
