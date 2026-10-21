@@ -1,3 +1,10 @@
+# NutriDesktop 6.5.5 — Exclusão segura de pacientes
+
+- Ação **Excluir paciente** remove definitivamente cadastros incorretos sem histórico clínico, com confirmação explícita.
+- Se houver prontuário, histórico, avaliação, plano, documento ou outro vínculo, a exclusão é substituída por arquivamento seguro, sem perda de dados.
+- Filtro **Mostrar arquivados** e ação **Restaurar paciente**, preservando acompanhamento e integridade referencial.
+- Migração SQLite 14 → 15 aditiva, sem serviços pagos, com testes de regressão e auditoria sem dados pessoais no evento de exclusão.
+
 # NutriDesktop 6.5.4 — Prontuário adaptado a telas menores
 
 - Corrige o prontuário cortado em notebooks no modo paisagem: as seis abas permitem rolagem vertical e horizontal quando necessário.

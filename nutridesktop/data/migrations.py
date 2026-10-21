@@ -145,6 +145,10 @@ UPDATE planos SET status='Histórico'
 CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_one_active_per_family
  ON planos(paciente_id,COALESCE(parent_plan_id,id)) WHERE status='Ativo';
 '''),
+Migration(15,"patient_archiving",r'''
+ALTER TABLE pacientes ADD COLUMN arquivado_em TEXT;
+CREATE INDEX IF NOT EXISTS idx_patients_archived_at ON pacientes(arquivado_em);
+'''),
 ]
 
 def current_version(conn: sqlite3.Connection) -> int:

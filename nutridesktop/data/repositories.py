@@ -35,11 +35,95 @@ class PatientRepository(BaseRepo):
                 raise ValueError("Outro paciente já usa esse nome e nascimento.")
             c.execute("UPDATE pacientes SET "+",".join(f"{k}=?" for k in data)+", atualizado_em=CURRENT_TIMESTAMP WHERE id=?",(*data.values(),pid))
             c.execute("INSERT INTO audit_log(entity_type,entity_id,action,details_json) VALUES('paciente',?,'update',?)",(pid,json.dumps(list(data))))
+    @staticmethod
+    def _has_clinical_records(conn, pid, patient):
+        """Exclusão física só de cadastro vazio, nunca de prontuário.
+
+        Inspeciona FKs do SQLite para não esquecer tabelas de novos módulos
+        clínicos; eventos automáticos de cadastro não contam como atendimento.
+        """
+        if (patient["observacoes"] or "").strip():
+            return True
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+        for row in tables:
+            table = row["name"]
+            if table == "timeline_events":
+                continue
+            safe_table = table.replace('"', '""')
+            for fk in conn.execute(f'PRAGMA foreign_key_list("{safe_table}")'):
+                if fk["table"] != "pacientes":
+                    continue
+                column = fk["from"].replace('"', '""')
+                if conn.execute(
+                    f'SELECT 1 FROM "{safe_table}" WHERE "{column}"=? LIMIT 1', (pid,)
+                ).fetchone():
+                    return True
+        return bool(conn.execute(
+            """SELECT 1 FROM timeline_events WHERE paciente_id=?
+               AND NOT (event_type='paciente' AND title IN
+               ('Cadastro do paciente', 'Cadastro do paciente demonstrativo'))
+               LIMIT 1""", (pid,)
+        ).fetchone())
+
+    def can_delete(self, pid):
+        with self.db.connect() as conn:
+            patient = conn.execute("SELECT * FROM pacientes WHERE id=?", (pid,)).fetchone()
+            if not patient:
+                raise ValueError("Paciente não localizado.")
+            return not self._has_clinical_records(conn, pid, patient)
+
+    def remove(self, pid):
+        """Exclui cadastro sem atendimento; com registros, arquiva sem cascata."""
+        with self.db.transaction() as conn:
+            patient = conn.execute("SELECT * FROM pacientes WHERE id=?", (pid,)).fetchone()
+            if not patient:
+                raise ValueError("Paciente não localizado.")
+            if self._has_clinical_records(conn, pid, patient):
+                conn.execute(
+                    "UPDATE pacientes SET arquivado_em=COALESCE(arquivado_em,CURRENT_TIMESTAMP), "
+                    "atualizado_em=CURRENT_TIMESTAMP WHERE id=?", (pid,)
+                )
+                action, result = "archive", "archived"
+            else:
+                # Os únicos filhos permitidos são os eventos automáticos de cadastro.
+                conn.execute("DELETE FROM pacientes WHERE id=?", (pid,))
+                action, result = "delete_registration", "deleted"
+            conn.execute(
+                "INSERT INTO audit_log(entity_type,entity_id,action,details_json) "
+                "VALUES('paciente',?,?,?)", (pid, action, "{}")
+            )
+            return result
+
+    def restore(self, pid):
+        with self.db.transaction() as conn:
+            patient = conn.execute(
+                "SELECT arquivado_em FROM pacientes WHERE id=?", (pid,)
+            ).fetchone()
+            if not patient:
+                raise ValueError("Paciente não localizado.")
+            if patient["arquivado_em"] is None:
+                return False
+            conn.execute(
+                "UPDATE pacientes SET arquivado_em=NULL, "
+                "atualizado_em=CURRENT_TIMESTAMP WHERE id=?", (pid,)
+            )
+            conn.execute(
+                "INSERT INTO audit_log(entity_type,entity_id,action,details_json) "
+                "VALUES('paciente',?,'restore','{}')", (pid,)
+            )
+            return True
+
     def get(self,pid):
         with self.db.connect() as c:return c.execute("SELECT * FROM pacientes WHERE id=?",(pid,)).fetchone()
-    def list(self,query=""):
+    def list(self,query="",archived=False):
         with self.db.connect() as c:
-            return c.execute("SELECT * FROM pacientes WHERE nome LIKE ? ORDER BY nome",(f"%{query}%",)).fetchall()
+            archived_clause = "IS NOT NULL" if archived else "IS NULL"
+            return c.execute(
+                f"SELECT * FROM pacientes WHERE nome LIKE ? AND arquivado_em {archived_clause} ORDER BY nome",
+                (f"%{query}%",)
+            ).fetchall()
     def _event(self,c,pid,typ,title,entity_id,meta):
         c.execute("INSERT INTO timeline_events(paciente_id,event_type,event_date,title,entity_id,metadata_json) VALUES(?,?,?,?,?,?)",(pid,typ,date.today().isoformat(),title,entity_id,json.dumps(meta,ensure_ascii=False)))
 
