@@ -527,6 +527,8 @@ class UiRefinementMixin:
     def open_patient(self):
         if not self._has_patient_selection():
             return
+        if hasattr(self, "show_archived_patients") and self.show_archived_patients.isChecked():
+            return  # Somente restauração é permitida na visualização de arquivados.
         row = self.patient_table.currentRow()
         self._open_patient_id(int(self.patient_table.item(row, 0).text()))
         self.refresh_patients()
